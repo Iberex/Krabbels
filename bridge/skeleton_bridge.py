@@ -56,11 +56,14 @@ REPO = os.path.dirname(HERE)
 K4A_CANDIDATES = [
     os.environ.get("K4A_BIN", ""),
     os.path.join(REPO, "sdk", "K4A-Wrapper", "bin"),
+    os.path.join(os.path.dirname(REPO), "K4A-Wrapper", "bin"),  # naast de repo, bv. Desktop\Femto\K4A-Wrapper
     r"C:\Femto\K4A-Wrapper\bin",
     r"C:\Program Files\OrbbecSDK K4A Wrapper\bin",
 ]
 K4ABT_CANDIDATES = [
     os.environ.get("K4ABT_ROOT", ""),
+    # uitgepakt (msiexec /a) naast de repo, zonder admin: Desktop\Femto\BodyTrackingSDK\...
+    os.path.join(os.path.dirname(REPO), "BodyTrackingSDK", "Azure Kinect Body Tracking SDK"),
     r"C:\Program Files\Azure Kinect Body Tracking SDK",
 ]
 MODEL_NAMES = {"full": "dnn_model_2_0_op11.onnx", "lite": "dnn_model_2_0_lite_op11.onnx"}
