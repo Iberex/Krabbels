@@ -35,6 +35,7 @@ Usage:
 
 import argparse
 import asyncio
+import collections
 import ctypes
 import json
 import logging
@@ -240,6 +241,8 @@ class Tracker:
         self.tracker = c_void_p()
         self.calibration = CalibrationBuffer()
         self.preview = None             # latest (ir, bodies) for the debug window
+        self.want_ir = lambda: True     # set by main(): only read the IR image when someone shows it
+        self.pop_error = None
 
     # -- life cycle ---------------------------------------------------------------------------
     def run(self):
@@ -305,35 +308,53 @@ class Tracker:
             self.device = c_void_p()
 
     # -- main loop ----------------------------------------------------------------------------
+    # Two threads: this one feeds camera captures into the tracker, a second one (pop_loop) takes the
+    # results out as soon as the GPU is done. Before, results were only collected when the NEXT capture
+    # arrived, which added up to one camera frame (33 ms) of delay.
     def loop(self):
         k4a, k4abt = self.k4a, self.k4abt
-        capture, frame = c_void_p(), c_void_p()
+        capture = c_void_p()
+        pending = collections.deque()  # time stamps of enqueued captures (FIFO, same order as results)
+        self.pop_error = None
+        done = threading.Event()
+        popper = threading.Thread(target=self.pop_loop, args=(pending, done), name="tracker-pop", daemon=True)
+        popper.start()
+        try:
+            while not self.stop.is_set():
+                if self.pop_error:
+                    raise self.pop_error
+                r = k4a.k4a_device_get_capture(self.device, byref(capture), 1000)
+                if r == K4A_WAIT_TIMEOUT:
+                    continue
+                if r != K4A_WAIT_SUCCEEDED:
+                    raise BridgeError("camera reageert niet meer (kabel los?)")
+                pending.append(time.perf_counter())
+                r = k4abt.k4abt_tracker_enqueue_capture(self.tracker, capture, 0)
+                k4a.k4a_capture_release(capture)
+                if r != K4A_WAIT_SUCCEEDED:
+                    pending.pop()      # not enqueued (queue full = frame skipped, or failure)
+                if r == K4A_WAIT_FAILED:
+                    raise BridgeError("body tracker weigert beelden")
+        finally:
+            done.set()
+            popper.join(2.0)
+
+    def pop_loop(self, pending, done):
+        k4abt = self.k4abt
+        frame = c_void_p()
         fps_count, fps_t0, fps = 0, time.time(), 0.0
         log_t0 = time.time()
-        pending = []                   # time stamps of enqueued captures (FIFO, same order as results)
-        while not self.stop.is_set():
-            r = k4a.k4a_device_get_capture(self.device, byref(capture), 1000)
-            if r == K4A_WAIT_TIMEOUT:
-                continue
-            if r != K4A_WAIT_SUCCEEDED:
-                raise BridgeError("camera reageert niet meer (kabel los?)")
-            t_in = time.perf_counter()
-            r = k4abt.k4abt_tracker_enqueue_capture(self.tracker, capture, 0)
-            k4a.k4a_capture_release(capture)
-            if r == K4A_WAIT_SUCCEEDED:
-                pending.append(t_in)
-            elif r == K4A_WAIT_FAILED:
-                raise BridgeError("body tracker weigert beelden")
-
-            # Pop every result that is ready (blocking a little when the queue is full).
-            while pending:
-                r = k4abt.k4abt_tracker_pop_result(self.tracker, byref(frame), 0 if len(pending) < 3 else 100)
+        try:
+            while not done.is_set():
+                r = k4abt.k4abt_tracker_pop_result(self.tracker, byref(frame), 100)
+                if r == K4A_WAIT_TIMEOUT:
+                    continue
                 if r != K4A_WAIT_SUCCEEDED:
-                    break
-                t_start = pending.pop(0)
+                    raise BridgeError("body tracker geeft geen resultaten meer")
+                t_start = pending.popleft() if pending else time.perf_counter()
                 try:
                     bodies = self.read_bodies(frame)
-                    ir = self.read_ir(frame)
+                    ir = self.read_ir(frame) if self.want_ir() else None
                 finally:
                     k4abt.k4abt_frame_release(frame)
 
@@ -344,11 +365,13 @@ class Tracker:
                 if now - log_t0 >= 30:
                     log.info("%.0f fps, %d lichaam/lichamen", fps, len(bodies))
                     log_t0 = now
-                h, w = (ir.shape if ir is not None else (576, 640))
+                h, w = (ir.shape if ir is not None else ((576, 640) if self.a.depth == "nfov" else (512, 512)))
                 msg = {"status": "ok", "text": "verbonden", "image_size": [w, h], "fps": round(fps, 1),
                        "latency_ms": round((time.perf_counter() - t_start) * 1000, 1), "bodies": bodies}
                 self.publish(msg, ir)
                 self.preview = (ir, bodies)
+        except Exception as e:  # handed to the capture thread, which restarts everything
+            self.pop_error = e if isinstance(e, BridgeError) else BridgeError(f"fout bij resultaten: {e}")
 
     def read_bodies(self, frame):
         k4a, k4abt = self.k4a, self.k4abt
@@ -436,6 +459,8 @@ class Server:
                 if message == "beeld":
                     self.image_clients.add(ws)
                     log.info("client wil camerabeeld: %s", ws.remote_address)
+                elif message == "geen beeld":
+                    self.image_clients.discard(ws)
         except Exception:
             pass
         finally:
@@ -535,6 +560,8 @@ def main():
 
     server = Server(args)
     tracker = Tracker(args, k4a, k4abt, model, server.publish)
+    if args.no_preview:
+        tracker.want_ir = lambda: bool(server.image_clients)
     stop = threading.Event()
     worker = threading.Thread(target=tracker.run, name="tracker", daemon=True)
     worker.start()
