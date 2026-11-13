@@ -10,9 +10,9 @@
 // Keyboard (for testing without camera), player 1 / player 2:
 //   connect B / N   ladder L / O   jump J / U   duck (hold) K / I
 // =====================================================================
-import { POSE, Tracker, initCamera, initPose, handInHand } from "./pose.js?v=20261113b";
-import { SvgCtx } from "./svgctx.js?v=20261113b";
-import { drawStyled } from "./stijl.js?v=20261113b";
+import { POSE, Tracker, initCamera, initPose, handInHand } from "./pose.js?v=20261113c";
+import { SvgCtx } from "./svgctx.js?v=20261113c";
+import { drawStyled } from "./stijl.js?v=20261113c";
 
 // ---------------------------------------------------------------------
 // Settings
@@ -33,6 +33,7 @@ const CFG = {
   gravity: 3.2, // H / s²
   climbSpeed: 0.55, // H / s
   slideTime: 0.45, // s. Page transition.
+  introTime: 6.5, // s. Short explanation (three cards) before the countdown, when switched on.
   maxPixelRatio: 2,
 };
 
@@ -143,6 +144,7 @@ const S = {
   screen: "menu", // menu | game
   mode: MODES.tijd,
   boardOn: store.get("krabbels-v2-boardon", true),
+  introOn: store.get("krabbels-v2-intro", true), // three explanation cards before the countdown
   style: store.get("krabbels-v2-style", true), // draw in the style (true) or grey (false) // scoreboard shown or not (A/B test)
   duo: false,
   phase: "ready", // ready | countdown | play | fail | done
@@ -318,6 +320,7 @@ function endRound(kind) {
     modus: S.mode.name,
     spelers: S.duo ? "duo" : "solo",
     scorebord: S.boardOn ? "aan" : "uit",
+    uitleg: S.introOn ? "aan" : "uit",
     afloop: kind === "done" ? "uitgespeeld" : kind === "time" ? "tijd op" : kind === "fail" ? "fout" : "gestopt",
     duur_s: S.runTime.toFixed(1),
     opgelost: S.cleared,
@@ -637,6 +640,11 @@ function update(dt) {
   if (S.phase === "ready") {
     const need = S.duo ? 2 : 1;
     if (presentCount() >= need) {
+      S.phase = S.introOn ? "intro" : "countdown";
+      S.phaseT = 0;
+    }
+  } else if (S.phase === "intro") {
+    if (S.phaseT >= CFG.introTime) {
       S.phase = "countdown";
       S.phaseT = 0;
     }
@@ -719,6 +727,7 @@ function draw() {
   drawEffects();
   drawHud();
   if (S.phase === "ready") drawReady();
+  if (S.phase === "intro") drawIntro();
   if (S.phase === "countdown") drawCountdown();
   if (S.debug) drawDebug();
 }
@@ -1188,6 +1197,93 @@ function drawReady() {
   text("Spatie = toch starten", W / 2, H * 0.56, H * 0.022, "#999", "center", 500);
 }
 
+// --- short explanation before the countdown: three cards ---------------------
+const INTRO_CARDS = () => [
+  { pics: [S.duo ? "connect2" : "connect"], label: S.duo ? "Hand in hand = brug" : "Armen wijd = brug" },
+  { pics: ["ladder"], label: "Armen omhoog = ladder" },
+  { pics: ["jump", "duck"], label: "Spring of buk" },
+];
+function drawIntro() {
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.fillRect(0, 0, W, H);
+  const t = S.phaseT;
+  text("Zo speel je", W / 2, H * 0.13, H * 0.06);
+  const cw = Math.min(W * 0.27, H * 0.52), ch = cw * 1.12, gap = cw * 0.12;
+  const x0 = W / 2 - (3 * cw + 2 * gap) / 2, y0 = H * 0.22;
+  INTRO_CARDS().forEach((c, i) => {
+    const x = x0 + i * (cw + gap), appear = clamp((t - i * 0.35) / 0.4, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = appear;
+    ctx.translate(0, (1 - appear) * H * 0.03);
+    rr(x, y0, cw, ch, cw * 0.08);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = C.dark;
+    ctx.stroke();
+    text(String(i + 1), x + cw * 0.1, y0 + cw * 0.1, cw * 0.08, C.mid);
+    const pic = c.pics[Math.floor(t / 1.2) % c.pics.length];
+    const bob = Math.sin(t * 4 + i) * cw * 0.015;
+    pictogram(pic, x + cw / 2, y0 + ch * 0.32 + bob, cw * 0.42, C.dark, 0);
+    // mini scene: what happens in the game
+    const f = (t % 1.8) / 1.4, gy = y0 + ch * 0.72;
+    ctx.strokeStyle = C.dark;
+    ctx.fillStyle = C.dark;
+    ctx.lineCap = "round";
+    if (i === 0) {
+      const a = x + cw * 0.25, b = x + cw * 0.75;
+      ctx.fillStyle = C.ground;
+      ctx.fillRect(x + cw * 0.08, gy, a - x - cw * 0.08, cw * 0.06);
+      ctx.fillRect(b, gy, x + cw * 0.92 - b, cw * 0.06);
+      ctx.lineWidth = cw * 0.03;
+      ctx.beginPath();
+      ctx.moveTo(a, gy);
+      ctx.lineTo(lerp(a, b, clamp(f, 0, 1)), gy);
+      ctx.stroke();
+      ctx.fillStyle = C.dark;
+      for (const px of [a, b]) {
+        ctx.beginPath();
+        ctx.arc(px, gy, cw * 0.025, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (i === 1) {
+      const wx = x + cw * 0.55, top = gy - cw * 0.3;
+      ctx.fillStyle = C.block;
+      ctx.fillRect(wx, top, cw * 0.12, gy - top);
+      ctx.lineWidth = cw * 0.015;
+      const lx = wx - cw * 0.1, up = lerp(gy, top, clamp(f, 0, 1));
+      ctx.beginPath();
+      ctx.moveTo(lx, gy);
+      ctx.lineTo(lx, up);
+      ctx.moveTo(lx + cw * 0.07, gy);
+      ctx.lineTo(lx + cw * 0.07, up);
+      for (let y = gy - cw * 0.04; y > up; y -= cw * 0.05) {
+        ctx.moveTo(lx, y);
+        ctx.lineTo(lx + cw * 0.07, y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = C.ground;
+      ctx.fillRect(x + cw * 0.08, gy, cw * 0.84, cw * 0.04);
+    } else {
+      ctx.fillStyle = C.ground;
+      ctx.fillRect(x + cw * 0.08, gy, cw * 0.84, cw * 0.04);
+      ctx.fillStyle = C.block;
+      if (pic === "jump") ctx.fillRect(x + cw * 0.46, gy - cw * 0.08, cw * 0.08, cw * 0.08);
+      else ctx.fillRect(x + cw * 0.42, y0 + ch * 0.58, cw * 0.16, gy - cw * 0.12 - (y0 + ch * 0.58));
+    }
+    text(c.label, x + cw / 2, y0 + ch * 0.88, cw * 0.075, C.dark);
+    ctx.restore();
+  });
+  const bw = W * 0.3, by = H * 0.86, f = clamp(t / CFG.introTime, 0, 1);
+  rr(W / 2 - bw / 2, by, bw, H * 0.012, H * 0.006);
+  ctx.fillStyle = C.light;
+  ctx.fill();
+  rr(W / 2 - bw / 2, by, Math.max(H * 0.012, bw * f), H * 0.012, H * 0.006);
+  ctx.fillStyle = C.dark;
+  ctx.fill();
+  text("Spatie = meteen starten", W / 2, H * 0.92, H * 0.022, "#999", "center", 500);
+}
+
 function drawCountdown() {
   const n = 3 - Math.floor(S.phaseT);
   const f = S.phaseT % 1;
@@ -1303,6 +1399,7 @@ function boardHtml(board, duo, highlight = null) {
 function renderMenu() {
   document.querySelectorAll("#players button").forEach((b) => b.classList.toggle("on", (b.dataset.p === "2") === S.duo));
   document.querySelectorAll("#boardon button").forEach((b) => b.classList.toggle("on", (b.dataset.b === "1") === S.boardOn));
+  document.querySelectorAll("#introon button").forEach((b) => b.classList.toggle("on", (b.dataset.u === "1") === S.introOn));
   document.querySelector(".boards").hidden = !S.boardOn;
   $("board-tijd").innerHTML = boardHtml("tijd", S.duo);
   $("board-score").innerHTML = boardHtml("score", S.duo);
@@ -1375,6 +1472,13 @@ document.querySelectorAll("#boardon button").forEach((b) =>
     renderMenu();
   })
 );
+document.querySelectorAll("#introon button").forEach((b) =>
+  b.addEventListener("click", () => {
+    S.introOn = b.dataset.u === "1";
+    store.set("krabbels-v2-intro", S.introOn);
+    renderMenu();
+  })
+);
 $("end-save").addEventListener("click", saveName);
 $("end-name-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
@@ -1425,9 +1529,9 @@ window.addEventListener("keydown", (e) => {
   }
   else if (key === "c") S.showCam = !S.showCam;
   else if (key === "p") downloadSvg(frameSvg(), `krabbels-${S.screen === "game" ? S.mode.key : "menu"}-${Date.now()}.svg`);
-  else if (key === " " && S.screen === "game" && S.phase === "ready") {
+  else if (key === " " && S.screen === "game" && (S.phase === "ready" || S.phase === "intro")) {
     e.preventDefault();
-    S.phase = "countdown";
+    S.phase = S.phase === "ready" && S.introOn ? "intro" : "countdown";
     S.phaseT = 0;
   } else if (S.screen === "menu") {
     const modes = { 0: "kalibratie", 1: "tijd", 2: "score" };

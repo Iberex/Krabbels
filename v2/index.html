@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Grandstander:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261113b" />
+  <link rel="stylesheet" href="style.css?v=20261113c" />
 </head>
 <body>
   <video id="webcam" playsinline muted autoplay></video>
@@ -26,6 +26,10 @@
           <div class="seg" id="boardon" role="group" aria-label="Scorebord">
             <button data-b="1" class="on">Scorebord aan</button>
             <button data-b="0">uit</button>
+          </div>
+          <div class="seg" id="introon" role="group" aria-label="Uitleg voor de start">
+            <button data-u="1" class="on">Uitleg aan</button>
+            <button data-u="0">uit</button>
           </div>
         </div>
       </header>
@@ -49,7 +53,7 @@
         </div>
         <details>
           <summary>Toetsen</summary>
-          <p><kbd>0</kbd>–<kbd>2</kbd> modus · <kbd>S</kbd> solo/duo · <kbd>Esc</kbd> terug naar menu · <kbd>F</kbd> volledig scherm · <kbd>C</kbd> camerabeeld · <kbd>D</kbd> debug · <kbd>T</kbd> stijl / grijs · <kbd>Spatie</kbd> starten zonder te wachten</p>
+          <p><kbd>0</kbd>–<kbd>2</kbd> modus · <kbd>S</kbd> solo/duo · <kbd>Esc</kbd> terug naar menu · <kbd>F</kbd> volledig scherm · <kbd>C</kbd> camerabeeld · <kbd>D</kbd> debug · <kbd>T</kbd> stijl / grijs · <kbd>Spatie</kbd> starten zonder te wachten / uitleg overslaan</p>
           <p>Testen zonder camera (speler 1 / speler 2): verbinden <kbd>B</kbd>/<kbd>N</kbd> · ladder <kbd>L</kbd>/<kbd>O</kbd> · springen <kbd>J</kbd>/<kbd>U</kbd> · bukken (ingedrukt houden) <kbd>K</kbd>/<kbd>I</kbd></p>
         </details>
       </footer>
@@ -78,7 +82,7 @@
 
   <div id="message"></div>
 
-  <script type="module" src="main.js?v=20261113b"></script>
+  <script type="module" src="main.js?v=20261113c"></script>
   <script>
     // Without a server (file://) modules and the camera are blocked: say so.
     if (location.protocol === "file:") {

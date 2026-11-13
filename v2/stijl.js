@@ -1154,6 +1154,99 @@ function drawReady() {
   hudText(`${Math.min(have, need)} / ${need}`, W / 2, H * 0.49, H * 0.05, C.navy, "center", 800);
   hudText("Spatie = toch starten", W / 2, H * 0.57, H * 0.024, "#8A7F70", "center", 600);
 }
+// --- short explanation before the countdown (three paper cards) ---------------
+function drawIntro() {
+  ctx.fillStyle = "rgba(243,238,227,0.9)";
+  ctx.fillRect(0, 0, W, H);
+  const t = S.phaseT;
+  hudText("Zo speel je", W / 2, H * 0.12, H * 0.07, C.ink, "center", 900);
+  const cards = [
+    { pics: [S.duo ? "connect2" : "connect"], label: S.duo ? "Hand in hand = brug" : "Armen wijd = brug" },
+    { pics: ["ladder"], label: "Armen omhoog = ladder" },
+    { pics: ["jump", "duck"], label: "Spring of buk" },
+  ];
+  const cw = Math.min(W * 0.27, H * 0.52), ch = cw * 1.14, gap = cw * 0.12;
+  const x0 = W / 2 - (3 * cw + 2 * gap) / 2, y0 = H * 0.21;
+  cards.forEach((c, i) => {
+    const x = x0 + i * (cw + gap), appear = clamp((t - i * 0.35) / 0.4, 0, 1);
+    const rot = [-1.5, 1, -0.8][i] * (Math.PI / 180);
+    ctx.save();
+    ctx.globalAlpha = appear;
+    ctx.translate(x + cw / 2, y0 + ch / 2 + (1 - appear) * H * 0.03);
+    ctx.rotate(rot);
+    ctx.translate(-cw / 2, -ch / 2);
+    ctx.save();
+    ctx.shadowColor = "rgba(40,25,10,0.28)";
+    ctx.shadowBlur = 10 * u;
+    ctx.shadowOffsetY = 6 * u;
+    fillPts(ctx, rrect(0, 0, cw, ch, cw * 0.06), "#FFFFFF");
+    ctx.restore();
+    const tp = tapeSprite(`intro-${i}`, cw * 0.36, 30 * u, [-4, 3, -2][i]);
+    blit(tp, cw / 2 - tp.w / 2, -tp.h / 2);
+    hudText(String(i + 1), cw * 0.1, cw * 0.11, cw * 0.09, C.navy, "center", 900);
+    const pic = c.pics[Math.floor(t / 1.2) % c.pics.length];
+    const st = sticker(pic, true, 0, H * 0.085 * 1.35);
+    const k = (cw * 0.5) / st.w, bob = Math.sin(t * 4 + i) * cw * 0.015;
+    ctx.save();
+    ctx.translate(cw / 2, ch * 0.3 + bob);
+    ctx.scale(k * 1.6, k * 1.6);
+    ctx.drawImage(st.c, -st.w / 2, -st.h / 2, st.w, st.h);
+    ctx.restore();
+    // mini scene: what happens in the game, with Puntje
+    const f = clamp((t % 1.8) / 1.4, 0, 1), gy = ch * 0.74;
+    const ground = (a, b) => {
+      fillPts(ctx, rect(a, gy, b, gy + cw * 0.07), C.green);
+      strokePts(ctx, [[a, gy + 2 * u], [b, gy + 2 * u]], C.greenD, 4 * u);
+    };
+    const { s: ps, ax, ay } = puntjeSprite(i === 0 ? "draw" : "cheer");
+    const pk = (cw * 0.22) / ps.h;
+    const drawP = (px, py, ang = 0, sq = 1) => {
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(ang);
+      ctx.scale(pk, pk * sq);
+      ctx.drawImage(ps.c, -ax, -ay, ps.w, ps.h);
+      ctx.restore();
+    };
+    if (i === 0) {
+      const a = cw * 0.24, b = cw * 0.76;
+      ground(cw * 0.06, a);
+      ground(b, cw * 0.94);
+      strokePts(ctx, [[a, gy], [lerp(a, b, f), gy]], C.line, 9 * u);
+      for (const px of [a, b]) fillPts(ctx, circle(px, gy, 8 * u, 14), C.orange);
+      drawP(lerp(a, b, f), gy, 0.38);
+    } else if (i === 1) {
+      ground(cw * 0.06, cw * 0.94);
+      const wx = cw * 0.55, top = gy - cw * 0.3;
+      fillPts(ctx, rect(wx, top, wx + cw * 0.12, gy), C.yellow);
+      strokePts(ctx, rect(wx, top, wx + cw * 0.12, gy), "#8A6512", 3 * u, 1, true);
+      const lx = wx - cw * 0.1, up = lerp(gy, top, f);
+      strokePts(ctx, [[lx, gy], [lx, up]], "#8A5A28", 4 * u);
+      strokePts(ctx, [[lx + cw * 0.07, gy], [lx + cw * 0.07, up]], "#8A5A28", 4 * u);
+      for (let y = gy - cw * 0.04; y > up; y -= cw * 0.05) strokePts(ctx, [[lx, y], [lx + cw * 0.07, y]], "#8A5A28", 3.5 * u);
+      drawP(wx + cw * 0.06, f >= 1 ? top - Math.abs(Math.sin(t * 8)) * cw * 0.04 : top);
+    } else {
+      ground(cw * 0.06, cw * 0.94);
+      if (pic === "jump") {
+        fillPts(ctx, rrect(cw * 0.44, gy - cw * 0.08, cw * 0.56, gy, 4 * u), C.pink);
+        fillPts(ctx, rrect(cw * 0.44, gy - cw * 0.08, cw * 0.56, gy - cw * 0.045, 4 * u), C.blue);
+        drawP(cw * 0.3, gy - Math.abs(Math.sin(t * 5)) * cw * 0.12);
+      } else {
+        const by = gy - cw * 0.13;
+        fillPts(ctx, rect(cw * 0.45, ch * 0.5, cw * 0.6, by - cw * 0.04), C.purple);
+        fillPts(ctx, [[cw * 0.45, by - cw * 0.04], [cw * 0.6, by - cw * 0.04], [cw * 0.525, by]], C.wood);
+        drawP(cw * 0.3, gy, 0, 0.62 + 0.08 * Math.sin(t * 6));
+      }
+    }
+    hudText(c.label, cw / 2, ch * 0.9, cw * 0.075, C.ink, "center", 800);
+    ctx.restore();
+  });
+  const bw = W * 0.3, by = H * 0.87, f = clamp(t / 6.5, 0, 1);
+  strokePts(ctx, [[W / 2 - bw / 2, by], [W / 2 + bw / 2, by]], "rgba(43,43,51,0.15)", 10 * u);
+  strokePts(ctx, [[W / 2 - bw / 2, by], [W / 2 - bw / 2 + bw * f, by]], C.line, 10 * u);
+  hudText("Spatie = meteen starten", W / 2, H * 0.93, H * 0.024, "#8A7F70", "center", 600);
+}
+
 function drawCountdown() {
   const n = 3 - Math.floor(S.phaseT), f = S.phaseT % 1;
   const s = H * (0.24 - f * 0.05);
@@ -1223,5 +1316,6 @@ export function drawStyled(api) {
   drawGrain();
   drawHud();
   if (S.phase === "ready") drawReady();
+  if (S.phase === "intro") drawIntro();
   if (S.phase === "countdown") drawCountdown();
 }
