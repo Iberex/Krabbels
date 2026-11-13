@@ -11,6 +11,7 @@
 //   connect B / N   ladder L / O   jump J / U   duck (hold) K / I
 // =====================================================================
 import { POSE, Tracker, initCamera, initPose } from "./pose.js";
+import { SvgCtx } from "./svgctx.js";
 
 // ---------------------------------------------------------------------
 // Settings
@@ -22,6 +23,7 @@ const CFG = {
   krabbel: 0.075, // H. Krabbel height.
   angleTol: 16, // degrees. How close your arm line must be to the line between the points.
   posTol: { solo: 0.09, duo: 0.14 }, // W. How far from the obstacle you may stand.
+  togetherWidth: 2.2, // Obstacles for both players (1+2) are this many times wider, so two children fit side by side.
   jumpBuffer: 900, // ms. A jump this long before the Krabbel arrives still counts.
   duckBuffer: 350, // ms.
   promptAhead: 0.32, // pages. The next obstacle's instruction grows when the Krabbel is this close.
@@ -57,16 +59,21 @@ const COURSES = {
 const $ = (id) => document.getElementById(id);
 const video = $("webcam");
 const canvas = $("game");
-const ctx = canvas.getContext("2d");
+const screenCtx = canvas.getContext("2d");
+let ctx = screenCtx; // swapped for an SvgCtx while exporting
+const silLayer = document.createElement("canvas"); // silhouettes, drawn solid, then copied see-through
+const silCtx = silLayer.getContext("2d");
 let W = 0, H = 0;
 
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, CFG.maxPixelRatio);
   W = window.innerWidth;
   H = window.innerHeight;
-  canvas.width = Math.round(W * dpr);
-  canvas.height = Math.round(H * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  for (const [c, g] of [[canvas, screenCtx], [silLayer, silCtx]]) {
+    c.width = Math.round(W * dpr);
+    c.height = Math.round(H * dpr);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
 }
 window.addEventListener("resize", resize);
 resize();
@@ -172,7 +179,8 @@ function makePage(index, specs, startLevel, duo) {
   const slots = n === 1 ? [0.5] : n === 2 ? [0.36, 0.72] : [0.3, 0.56, 0.82];
   let lv = startLevel;
   const obs = specs.map((sp, i) => {
-    const w = SIZE[sp.t].w;
+    const together = duo && sp.owner === 3;
+    const w = SIZE[sp.t].w * (together ? CFG.togetherWidth : 1);
     const xc = index + slots[i];
     const o = {
       t: sp.t,
@@ -344,14 +352,20 @@ function connectAngle(o) {
   return (Math.atan2(dy, dx) * 180) / Math.PI;
 }
 
+// How far (px) from the obstacle centre a player may stand. A wide "together"
+// obstacle counts its whole width, so both players can stand anywhere over it.
+function posTolFor(o) {
+  const base = (S.duo ? CFG.posTol.duo : CFG.posTol.solo) * W;
+  return o.owner === 3 ? base + ((o.x1 - o.x0) * W) / 2 : base;
+}
+
 function playerFits(i, o) {
   const p = tracker.players[i];
   const s = sim[i];
   if (o.t === "connect" && s.connect) return true;
   if (o.t === "ladder" && s.ladder) return true;
   if (!p.present) return false;
-  const tol = (S.duo ? CFG.posTol.duo : CFG.posTol.solo) * W;
-  const near = Math.abs(p.cx - obsScreenX(o)) <= tol;
+  const near = Math.abs(p.cx - obsScreenX(o)) <= posTolFor(o);
   if (o.t === "connect") return near && p.arms !== null && Math.abs(p.arms - connectAngle(o)) <= CFG.angleTol;
   if (o.t === "ladder") return near && p.ladder;
   return false;
@@ -980,32 +994,51 @@ function drawSilhouettes(alpha = 1, big = false) {
   tracker.players.forEach((p, i) => {
     if (!p.present || !p.body) return;
     const b = p.body;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = big ? "rgba(0,0,0,0.22)" : C.silhouette;
-    ctx.fillStyle = big ? "rgba(0,0,0,0.22)" : C.silhouette;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = H * 0.035;
-    const seg = (...names) => {
-      ctx.beginPath();
-      ctx.moveTo(b[names[0]].x, b[names[0]].y);
-      for (const n of names.slice(1)) ctx.lineTo(b[n].x, b[n].y);
-      ctx.stroke();
-    };
-    seg("lWr", "lEl", "lSh", "rSh", "rEl", "rWr");
-    seg("lSh", "lHip", "lKn", "lAn");
-    seg("rSh", "rHip", "rKn", "rAn");
-    seg("lHip", "rHip");
+    const opacity = (big ? 0.22 : 0.13) * alpha;
+    // Drawn solid first, then made see-through as a whole, so overlapping
+    // limbs don't show darker joints.
+    if (ctx instanceof SvgCtx) {
+      ctx.beginGroup(`speler-${i + 1}`, opacity);
+      drawFigure(ctx, b);
+      ctx.endGroup();
+    } else {
+      silCtx.clearRect(0, 0, W, H);
+      drawFigure(silCtx, b);
+      ctx.save();
+      ctx.globalAlpha = opacity;
+      ctx.drawImage(silLayer, 0, 0, W, H);
+      ctx.restore();
+    }
     const shMid = { x: (b.lSh.x + b.rSh.x) / 2, y: (b.lSh.y + b.rSh.y) / 2 };
     const headR = Math.hypot(b.lSh.x - b.rSh.x, b.lSh.y - b.rSh.y) * 0.42;
-    ctx.beginPath();
-    ctx.arc(b.nose.x, Math.min(b.nose.y, shMid.y - headR * 1.1), headR, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
     if (S.duo) text(String(i + 1), p.cx, Math.min(b.nose.y, shMid.y) - headR * 2.4, H * 0.04, C.mid);
     if (S.screen === "game" && S.mode.key !== "kalibratie") drawStepHint(p, i);
   });
+}
+
+function drawFigure(g, b) {
+  g.save();
+  g.strokeStyle = "#000";
+  g.fillStyle = "#000";
+  g.lineCap = "round";
+  g.lineJoin = "round";
+  g.lineWidth = H * 0.035;
+  const seg = (...names) => {
+    g.beginPath();
+    g.moveTo(b[names[0]].x, b[names[0]].y);
+    for (const n of names.slice(1)) g.lineTo(b[n].x, b[n].y);
+    g.stroke();
+  };
+  seg("lWr", "lEl", "lSh", "rSh", "rEl", "rWr");
+  seg("lSh", "lHip", "lKn", "lAn");
+  seg("rSh", "rHip", "rKn", "rAn");
+  seg("lHip", "rHip");
+  const shMid = { x: (b.lSh.x + b.rSh.x) / 2, y: (b.lSh.y + b.rSh.y) / 2 };
+  const headR = Math.hypot(b.lSh.x - b.rSh.x, b.lSh.y - b.rSh.y) * 0.42;
+  g.beginPath();
+  g.arc(b.nose.x, Math.min(b.nose.y, shMid.y - headR * 1.1), headR, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
 }
 
 // Arrow under a player who stands too far from their next obstacle.
@@ -1013,7 +1046,7 @@ function drawStepHint(p, i) {
   const o = nextObstacle();
   if (!o || o.solved || (o.t !== "connect" && o.t !== "ladder") || !ownersOf(o).includes(i)) return;
   if (o.page !== (S.slideT >= 1 ? Math.round(S.camX) : S.slideTo)) return;
-  const tol = (S.duo ? CFG.posTol.duo : CFG.posTol.solo) * W;
+  const tol = posTolFor(o);
   const dx = obsScreenX(o) - p.cx;
   if (Math.abs(dx) <= tol) return;
   const dir = Math.sign(dx), y = FLOOR() + H * 0.09, x = p.cx + dir * H * 0.05;
@@ -1046,7 +1079,7 @@ function drawHud() {
       ctx.fill();
     }
   }
-  text("Esc = menu", W - pad, H - pad * 0.6, H * 0.018, "#aaa", "right", 500);
+  if (!(ctx instanceof SvgCtx)) text("Esc = menu", W - pad, H - pad * 0.6, H * 0.018, "#aaa", "right", 500);
 }
 
 function drawReady() {
@@ -1111,7 +1144,7 @@ function drawCalibration() {
       meter(cx + gap * 0.3, H * 0.34, "Bukken", p.drop, POSE.duckIn, p.ducking);
     }
   }
-  text(`${S.duo ? "Duo" : "Solo"} · Esc = menu`, W - H * 0.04, H - H * 0.03, H * 0.018, "#aaa", "right", 500);
+  if (!(ctx instanceof SvgCtx)) text(`${S.duo ? "Duo" : "Solo"} · Esc = menu`, W - H * 0.04, H - H * 0.03, H * 0.018, "#aaa", "right", 500);
   if (S.debug) drawDebug();
 }
 
@@ -1285,6 +1318,7 @@ window.addEventListener("keydown", (e) => {
     else document.exitFullscreen?.();
   } else if (key === "d") S.debug = !S.debug;
   else if (key === "c") S.showCam = !S.showCam;
+  else if (key === "p") downloadSvg(frameSvg(), `krabbels-${S.screen === "game" ? S.mode.key : "menu"}-${Date.now()}.svg`);
   else if (key === " " && S.screen === "game" && S.phase === "ready") {
     e.preventDefault();
     S.phase = "countdown";
@@ -1307,10 +1341,207 @@ window.addEventListener("keyup", (e) => {
 // ---------------------------------------------------------------------
 goMenu();
 requestAnimationFrame(frame);
+// ---------------------------------------------------------------------
+// SVG export (P = current frame) and fixed scenes for Figma
+// ---------------------------------------------------------------------
+function frameSvg(width = W, height = H, setup = null) {
+  const keep = { W, H };
+  W = width;
+  H = height;
+  ctx = new SvgCtx(W, H);
+  try {
+    if (setup) setup();
+    draw();
+    return ctx.toString();
+  } finally {
+    ctx = screenCtx;
+    W = keep.W;
+    H = keep.H;
+  }
+}
+
+function downloadSvg(svg, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// A made-up player, so the scenes show a silhouette without a camera.
+function fakePlayer(i, cx, { pose = "stand", arms = "down", angle = 0 } = {}) {
+  const F = CFG.figure * H, floor = CFG.silFloor * H;
+  const up = pose === "jump" ? 0.09 * F : 0;
+  const duck = pose === "duck" ? 0.22 * F : 0;
+  const sh = 0.1 * F, hp = 0.065 * F;
+  const b = {};
+  b.lAn = { x: cx - 0.08 * F, y: floor - up };
+  b.rAn = { x: cx + 0.08 * F, y: floor - up };
+  const kx = pose === "duck" ? 0.13 * F : pose === "jump" ? 0.05 * F : 0.07 * F;
+  const ky = pose === "duck" ? 0.18 * F : pose === "jump" ? 0.22 * F : 0.25 * F;
+  b.lKn = { x: cx - kx, y: floor - up - ky };
+  b.rKn = { x: cx + kx, y: floor - up - ky };
+  b.lHip = { x: cx - hp, y: floor - up - 0.47 * F + duck };
+  b.rHip = { x: cx + hp, y: floor - up - 0.47 * F + duck };
+  b.lSh = { x: cx - sh, y: floor - up - 0.77 * F + duck };
+  b.rSh = { x: cx + sh, y: floor - up - 0.77 * F + duck };
+  b.nose = { x: cx, y: floor - up - 0.9 * F + duck };
+  const my = b.lSh.y;
+  if (arms === "side") {
+    const a = (angle * Math.PI) / 180, dx = Math.cos(a), dy = -Math.sin(a), L = sh + 0.36 * F;
+    b.lWr = { x: cx - dx * L, y: my - dy * L };
+    b.rWr = { x: cx + dx * L, y: my + dy * L };
+    b.lEl = { x: cx - dx * (sh + 0.18 * F), y: my - dy * (sh + 0.18 * F) };
+    b.rEl = { x: cx + dx * (sh + 0.18 * F), y: my + dy * (sh + 0.18 * F) };
+  } else if (arms === "up") {
+    b.lEl = { x: cx - sh - 0.03 * F, y: my - 0.18 * F };
+    b.rEl = { x: cx + sh + 0.03 * F, y: my - 0.18 * F };
+    b.lWr = { x: cx - sh - 0.04 * F, y: my - 0.36 * F };
+    b.rWr = { x: cx + sh + 0.04 * F, y: my - 0.36 * F };
+  } else {
+    b.lEl = { x: cx - sh - 0.03 * F, y: my + 0.15 * F };
+    b.rEl = { x: cx + sh + 0.03 * F, y: my + 0.15 * F };
+    b.lWr = { x: cx - sh - 0.02 * F, y: my + 0.3 * F };
+    b.rWr = { x: cx + sh + 0.02 * F, y: my + 0.3 * F };
+  }
+  Object.assign(tracker.players[i], {
+    present: true,
+    body: b,
+    cx,
+    arms: arms === "side" ? angle : null,
+    ladder: arms === "up",
+    ducking: pose === "duck",
+    jumping: pose === "jump",
+    jumpAt: pose === "jump" ? S.time : -1e9,
+    lift: pose === "jump" ? 0.31 : 0.02,
+    drop: pose === "duck" ? 0.62 : -0.02,
+  });
+}
+
+function stage(modeKey, duo, pages) {
+  S.mode = MODES[modeKey];
+  S.screen = "game";
+  S.duo = duo;
+  S.phase = "play";
+  S.phaseT = 0;
+  S.runTime = 0;
+  S.cleared = 0;
+  S.effects = [];
+  S.camX = 0;
+  S.slideT = 1;
+  S.speed = S.mode.speed || 0;
+  let lv = 0;
+  S.pages = (pages || []).map((sp, i) => {
+    const pg = makePage(i, sp, lv, duo);
+    lv = pg.end;
+    return pg;
+  });
+  S.k = { x: 0.06, y: 0, vy: 0, state: "walk", anim: 0.3, jump: null, look: 0 };
+  tracker.reset();
+  sim.forEach((x) => Object.assign(x, { connect: false, ladder: false, duck: false, jumpAt: -1e9 }));
+  return S.pages[0] ? S.pages[0].obs : [];
+}
+const placeK = (x, state = "walk", y = null) => Object.assign(S.k, { x, state, y: y ?? surfaceAt(x) ?? 0 });
+
+const SCENES = {
+  "01-aftellen": () => {
+    stage("tijd", false, [[{ t: "connect", dh: 0 }, { t: "jump" }]]);
+    S.phase = "countdown";
+    S.phaseT = 1.2;
+    fakePlayer(0, 0.5 * W);
+  },
+  "02-brug-wachten": () => {
+    const [o] = stage("tijd", false, [[{ t: "connect", dh: 0 }, { t: "ladder" }]]);
+    placeK(o.stop, "wait");
+    S.runTime = 4.3;
+    fakePlayer(0, 0.12 * W, { arms: "side", angle: 28 });
+  },
+  "03-brug-gemaakt": () => {
+    const [o] = stage("tijd", false, [[{ t: "connect", dh: 0 }, { t: "ladder" }]]);
+    o.solved = o.cleared = true;
+    placeK(o.x0 + 0.06);
+    S.runTime = 6.1;
+    S.cleared = 1;
+    fakePlayer(0, obsScreenX(o), { arms: "side", angle: 0 });
+  },
+  "04-helling": () => {
+    const [o] = stage("tijd", false, [[{ t: "connect", dh: 0.14 }, { t: "duck" }]]);
+    placeK(o.stop, "wait");
+    o.match = S.mode.hold * 0.6;
+    S.runTime = 9.4;
+    fakePlayer(0, obsScreenX(o), { arms: "side", angle: connectAngle(o) });
+  },
+  "05-ladder": () => {
+    const [o] = stage("tijd", false, [[{ t: "ladder" }, { t: "jump" }]]);
+    o.solved = o.cleared = true;
+    placeK(o.stop, "climb", o.base + 0.13);
+    S.runTime = 14.8;
+    S.cleared = 2;
+    fakePlayer(0, obsScreenX(o), { arms: "up" });
+  },
+  "06-springen": () => {
+    const [o] = stage("tijd", false, [[{ t: "jump" }, { t: "connect", dh: -0.12 }]]);
+    o.cleared = true;
+    placeK(o.xc, "jump", o.base + 0.11);
+    S.runTime = 21.5;
+    S.cleared = 3;
+    fakePlayer(0, 0.45 * W, { pose: "jump", arms: "down" });
+  },
+  "07-bukken": () => {
+    const [o] = stage("tijd", false, [[{ t: "duck" }, { t: "connect", dh: 0.12 }]]);
+    o.cleared = true;
+    placeK(o.xc, "duck");
+    S.runTime = 27.2;
+    S.cleared = 4;
+    fakePlayer(0, 0.45 * W, { pose: "duck" });
+  },
+  "08-duo-samen": () => {
+    const [o] = stage("tijd", true, [[{ t: "connect", dh: 0, owner: 3 }, { t: "jump", owner: 2 }]]);
+    placeK(o.stop, "wait");
+    o.match = S.mode.hold * 0.4;
+    S.runTime = 12.6;
+    fakePlayer(0, obsScreenX(o) - 0.07 * W, { arms: "side", angle: 0 });
+    fakePlayer(1, obsScreenX(o) + 0.09 * W, { arms: "side", angle: 0 });
+  },
+  "09-duo-om-de-beurt": () => {
+    const obs = stage("tijd", true, [[{ t: "connect", dh: 0.12, owner: 1 }, { t: "ladder", owner: 2 }]]);
+    obs[0].solved = obs[0].cleared = true;
+    placeK(obs[0].x1 + 0.04);
+    S.runTime = 18.0;
+    S.cleared = 3;
+    fakePlayer(0, 0.24 * W, { arms: "down" });
+    fakePlayer(1, 0.62 * W, { arms: "up" });
+  },
+  "10-run-score": () => {
+    const [o] = stage("score", false, [[{ t: "jump" }, { t: "connect", dh: 0.18 }, { t: "duck" }]]);
+    S.speed = 0.24;
+    S.cleared = 14;
+    S.runTime = 48;
+    placeK(o.stop - 0.05);
+    fakePlayer(0, 0.4 * W, { pose: "jump" });
+  },
+  "11-kalibratie": () => {
+    stage("kalibratie", false, []);
+    fakePlayer(0, 0.5 * W, { arms: "side", angle: 20 });
+  },
+};
+
+// Renders every scene to SVG at 1920 x 1080: { name: svg }.
+function sceneSvgs(width = 1920, height = 1080) {
+  const keepScreen = S.screen;
+  const out = {};
+  for (const [name, setup] of Object.entries(SCENES)) out[name] = frameSvg(width, height, setup);
+  tracker.reset();
+  if (keepScreen === "menu") goMenu();
+  return out;
+}
+
 // For testing in the console: krabbels.step(seconds) runs the game without waiting for frames.
 window.krabbels = {
   S,
   sim,
+  sceneSvgs,
+  frameSvg,
   step(seconds, dt = 1 / 60) {
     for (let t = 0; t < seconds; t += dt) {
       S.time += dt * 1000;
