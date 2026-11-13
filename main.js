@@ -355,8 +355,35 @@ function connectAngle(o) {
 // How far (px) from the obstacle centre a player may stand. A wide "together"
 // obstacle counts its whole width, so both players can stand anywhere over it.
 function posTolFor(o) {
-  const base = (S.duo ? CFG.posTol.duo : CFG.posTol.solo) * W;
-  return o.owner === 3 ? base + ((o.x1 - o.x0) * W) / 2 : base;
+  if (S.duo && o.owner === 3) return Infinity; // together: stand wherever you fit, side by side
+  return (S.duo ? CFG.posTol.duo : CFG.posTol.solo) * W;
+}
+
+// Two players holding hands: the line from the outer hand of the left player
+// to the outer hand of the right player. Its angle in degrees, or null.
+// Both outer arms must be stretched outwards, both inner hands point inwards.
+function chainArms() {
+  if (!S.duo) return null;
+  const [a, b] = tracker.players;
+  if (!a.present || !b.present || !a.body || !b.body) return null;
+  const [Lb, Rb] = a.cx <= b.cx ? [a.body, b.body] : [b.body, a.body];
+  const shw = (q) => Math.hypot(q.lSh.x - q.rSh.x, q.lSh.y - q.rSh.y) || 1;
+  const sw = (shw(Lb) + shw(Rb)) / 2;
+  const [Lout, Lin] = Lb.lWr.x < Lb.rWr.x ? [Lb.lWr, Lb.rWr] : [Lb.rWr, Lb.lWr];
+  const [Rin, Rout] = Rb.lWr.x < Rb.rWr.x ? [Rb.lWr, Rb.rWr] : [Rb.rWr, Rb.lWr];
+  const LshMin = Math.min(Lb.lSh.x, Lb.rSh.x), LshMax = Math.max(Lb.lSh.x, Lb.rSh.x);
+  const RshMin = Math.min(Rb.lSh.x, Rb.rSh.x), RshMax = Math.max(Rb.lSh.x, Rb.rSh.x);
+  if (LshMin - Lout.x < 0.8 * sw || Rout.x - RshMax < 0.8 * sw) return null; // outer arms stretched out
+  if (Lin.x < LshMax - 0.2 * sw || Rin.x > RshMin + 0.2 * sw) return null; // inner hands towards each other
+  return (Math.atan2(-(Rout.y - Lout.y), Rout.x - Lout.x) * 180) / Math.PI;
+}
+
+// A together-connect is solved by both players separately, or hand in hand.
+function togetherFits(o) {
+  if (!(S.duo && o.owner === 3 && o.t === "connect")) return false;
+  if (sim[0].connect && sim[1].connect) return true;
+  const a = chainArms();
+  return a !== null && Math.abs(a - connectAngle(o)) <= CFG.angleTol;
 }
 
 function playerFits(i, o) {
@@ -392,7 +419,7 @@ function updateSolving(dt) {
     if (o.solved || o.cleared || (o.t !== "connect" && o.t !== "ladder")) continue;
     if (o.page !== page) continue;
     if (o.seenAt === null) o.seenAt = S.runTime;
-    const ok = ownersOf(o).every((i) => playerFits(i, o));
+    const ok = ownersOf(o).every((i) => playerFits(i, o)) || togetherFits(o);
     o.match = ok ? o.match + dt : Math.max(0, o.match - dt * 2);
     if (o.match >= S.mode.hold) {
       o.solved = true;
@@ -806,6 +833,19 @@ function ring(xc, lv, f) {
 // Show the owner's arm line over the gap, so they see how close they are.
 function drawArmFeedback(o, A, B) {
   const owners = ownersOf(o);
+  const chain = S.duo && o.owner === 3 ? chainArms() : null;
+  if (chain !== null) {
+    const ang = (-chain * Math.PI) / 180;
+    const cx = (A.x + B.x) / 2, cy = (A.y + B.y) / 2, half = Math.hypot(B.x - A.x, B.y - A.y) / 2;
+    ctx.strokeStyle = togetherFits(o) ? "rgba(0,0,0,0.75)" : "rgba(0,0,0,0.25)";
+    ctx.lineWidth = H * 0.012;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(cx - Math.cos(ang) * half, cy - Math.sin(ang) * half);
+    ctx.lineTo(cx + Math.cos(ang) * half, cy + Math.sin(ang) * half);
+    ctx.stroke();
+    return;
+  }
   owners.forEach((i) => {
     const p = tracker.players[i];
     if (!p.present || p.arms === null) return;
@@ -913,7 +953,7 @@ function drawPrompt(o, scale, now, isNext) {
   ctx.strokeStyle = C.dark;
   ctx.stroke();
   const fg = now ? "#fff" : C.dark;
-  pictogram(o.t, x, y, s, fg, o.t === "connect" ? connectAngle(o) : 0);
+  pictogram(o.t === "connect" && S.duo && o.owner === 3 ? "connect2" : o.t, x, y, s, fg, o.t === "connect" ? connectAngle(o) : 0);
   if (S.duo) {
     const label = o.owner === 3 ? "1+2" : String(o.owner);
     rr(x + s * 0.32, y - s * 0.86, s * 0.62, s * 0.36, s * 0.18);
@@ -948,7 +988,18 @@ function pictogram(type, x, y, s, color, angle = 0) {
     ctx.stroke();
   };
   const u = s * 0.1;
-  if (type === "connect" || type === "ladder") {
+  if (type === "connect2") {
+    // two children hand in hand, outer arms along the line
+    const a = (-angle * Math.PI) / 180, L = 2.2 * u;
+    for (const sx of [-1.9, 1.9]) {
+      ctx.beginPath();
+      ctx.arc(sx * u, -3 * u, s * 0.07, 0, Math.PI * 2);
+      ctx.fill();
+      line([sx * u, -2.1 * u, sx * u, 0.8 * u]);
+      line([(sx - 0.9) * u, 3.6 * u, sx * u, 0.8 * u, (sx + 0.9) * u, 3.6 * u]);
+    }
+    line([-1.9 * u - Math.cos(a) * L, -1.6 * u - Math.sin(a) * L, -1.9 * u, -1.6 * u, 0, -0.6 * u, 1.9 * u, -1.6 * u, 1.9 * u + Math.cos(a) * L, -1.6 * u + Math.sin(a) * L]);
+  } else if (type === "connect" || type === "ladder") {
     head(0, -3.2 * u);
     line([0, -2.2 * u, 0, 1 * u]); // body
     line([-1.2 * u, 4 * u, 0, 1 * u, 1.2 * u, 4 * u]); // legs
@@ -1143,6 +1194,10 @@ function drawCalibration() {
       meter(cx - gap * 1.1, H * 0.34, "Springen", p.lift, POSE.jumpIn, p.jumping || S.time - p.jumpAt < 600);
       meter(cx + gap * 0.3, H * 0.34, "Bukken", p.drop, POSE.duckIn, p.ducking);
     }
+  }
+  if (S.duo) {
+    const ch = chainArms();
+    text(ch === null ? "Hand in hand: —" : `Hand in hand ${Math.round(ch)}°`, W / 2, H * 0.06, H * 0.03, ch === null ? "#bbb" : C.dark, "center", 700);
   }
   if (!(ctx instanceof SvgCtx)) text(`${S.duo ? "Duo" : "Solo"} · Esc = menu`, W - H * 0.04, H - H * 0.03, H * 0.018, "#aaa", "right", 500);
   if (S.debug) drawDebug();

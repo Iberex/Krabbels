@@ -469,7 +469,15 @@ function pictogram(g, type, x, y, s, color, angle, r) {
   const k = s * 0.1, lw = s * 0.08;
   const line = (pts) => crayon(g, pts.map(([a, b]) => [x + a * k, y + b * k]), color, lw, r, { grain: false });
   const head = (hx, hy) => fillPts(g, circle(x + hx * k, y + hy * k, s * 0.09, 16), color);
-  if (type === "connect" || type === "ladder") {
+  if (type === "connect2") {
+    const a = (-angle * Math.PI) / 180, L = 2.2;
+    for (const sx of [-1.9, 1.9]) {
+      fillPts(g, circle(x + sx * k, y - 3 * k, s * 0.07, 14), color);
+      line([[sx, -2.1], [sx, 0.8]]);
+      line([[sx - 0.9, 3.6], [sx, 0.8], [sx + 0.9, 3.6]]);
+    }
+    line([[-1.9 - Math.cos(a) * L, -1.6 - Math.sin(a) * L], [-1.9, -1.6], [0, -0.6], [1.9, -1.6], [1.9 + Math.cos(a) * L, -1.6 + Math.sin(a) * L]]);
+  } else if (type === "connect" || type === "ladder") {
     head(0, -3.2);
     line([[0, -2.2], [0, 1]]);
     line([[-1.2, 4], [0, 1], [1.2, 4]]);
@@ -777,6 +785,13 @@ function drawConnect(o) {
 }
 
 function drawArmFeedback(o, Ap, Bp) {
+  const chain = S.duo && o.owner === 3 ? A.chainArms() : null;
+  if (chain !== null) {
+    const ang = (-chain * Math.PI) / 180, ok = A.togetherFits(o);
+    const cx = (Ap.x + Bp.x) / 2, cy = (Ap.y + Bp.y) / 2, half = Math.hypot(Bp.x - Ap.x, Bp.y - Ap.y) / 2;
+    strokePts(ctx, [[cx - Math.cos(ang) * half, cy - Math.sin(ang) * half], [cx + Math.cos(ang) * half, cy + Math.sin(ang) * half]], ok ? C.line : C.ink, 7 * u, ok ? 0.6 : 0.22, false, [14 * u, 10 * u]);
+    return;
+  }
   A.ownersOf(o).forEach((i) => {
     const p = A.tracker.players[i];
     if (!p.present || p.arms === null) return;
@@ -1005,7 +1020,8 @@ function drawPrompts() {
     if (isNext && (o.t === "connect" || o.t === "ladder") && S.k.state === "wait") now = true;
     const scale = close ? 1.35 : isNext ? 1.05 : 0.8;
     const { x, y } = promptAnchor(o);
-    const st = sticker(o.t, now, o.t === "connect" ? A.connectAngle(o) : 0, base * 1.35);
+    const type = o.t === "connect" && S.duo && o.owner === 3 ? "connect2" : o.t;
+    const st = sticker(type, now, o.t === "connect" ? A.connectAngle(o) : 0, base * 1.35);
     const k = (scale / 1.35) * (now ? 1 + 0.06 * Math.sin(S.time / 90) : 1);
     ctx.save();
     ctx.globalAlpha = isNext ? 1 : 0.55;
