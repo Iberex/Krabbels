@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Krabbels vergelijking</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" aria-live="polite">starten...</div>
+
+  <figure id="camera">
+    <canvas id="preview" width="232" height="208"></canvas>
+    <figcaption id="preview-label"></figcaption>
+  </figure>
+
+  <div id="message" hidden></div>
+  <section id="results" hidden></section>
+
+  <footer id="keys">
+    T = test · U = resultaten · W = bron wisselen · SPATIE = brug · F = volledig scherm · R = opnieuw
+  </footer>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
