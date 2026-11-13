@@ -1029,6 +1029,24 @@ function drawPrompts() {
     ctx.scale(k, k);
     ctx.drawImage(st.c, -st.w / 2, -st.h / 2, st.w, st.h);
     ctx.restore();
+    const left = isNext ? A.graceLeft() : null;
+    if (left !== null) {
+      // grace left: an orange crayon ring that runs out
+      const rr = base * scale * 0.98;
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineWidth = 10 * u;
+      ctx.strokeStyle = "rgba(43,43,51,0.15)";
+      ctx.beginPath();
+      ctx.arc(x, y, rr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = left < 0.35 ? C.red : C.line;
+      ctx.lineWidth = 11 * u;
+      ctx.beginPath();
+      ctx.arc(x, y, rr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left);
+      ctx.stroke();
+      ctx.restore();
+    }
     if (S.duo) {
       const s = base * scale, label = o.owner === 3 ? "1+2" : String(o.owner);
       const bx = x + s * 0.66, by = y - s * 0.72, bw = (label.length > 1 ? 0.8 : 0.46) * s, bh = 0.4 * s;

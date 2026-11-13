@@ -10,9 +10,9 @@
 // Keyboard (for testing without camera), player 1 / player 2:
 //   connect B / N   ladder L / O   jump J / U   duck (hold) K / I
 // =====================================================================
-import { POSE, Tracker, initCamera, initPose, handInHand } from "./pose.js?v=20261113";
-import { SvgCtx } from "./svgctx.js?v=20261113";
-import { drawStyled } from "./stijl.js?v=20261113";
+import { POSE, Tracker, initCamera, initPose, handInHand } from "./pose.js?v=20261113b";
+import { SvgCtx } from "./svgctx.js?v=20261113b";
+import { drawStyled } from "./stijl.js?v=20261113b";
 
 // ---------------------------------------------------------------------
 // Settings
@@ -39,7 +39,9 @@ const CFG = {
 const MODES = {
   kalibratie: { key: "kalibratie", name: "Kalibratie" },
   tijd: { key: "tijd", name: "Run · tijd", speed: 0.15, wait: true, hold: 0.22, course: "tijd", board: "tijd" },
-  score: { key: "score", name: "Run · score", speed: 0.13, speedUp: 0.05, maxSpeed: 0.36, wait: false, hold: 0.2, course: "endless", board: "score", maxTime: 120 },
+  // grace: when the Krabbel reaches an obstacle that is not done yet, it waits this long before it is a mistake.
+  // Long at the start (2.5 s), shorter with every obstacle, 0.6 s after 20 obstacles.
+  score: { key: "score", name: "Run · score", speed: 0.13, speedUp: 0.05, maxSpeed: 0.36, wait: false, hold: 0.2, course: "endless", board: "score", maxTime: 120, graceStart: 2.5, graceMin: 0.6, graceSteps: 20 },
 };
 
 // Fixed courses, so every child gets the same run. One array per page.
@@ -471,6 +473,19 @@ function startPass(o) {
   if (S.mode.speedUp) S.speed = Math.min(S.mode.maxSpeed, S.mode.speed * (1 + S.mode.speedUp * S.cleared));
 }
 
+// Score mode: seconds of grace at the next obstacle (shorter the further you get).
+function graceNow() {
+  const m = S.mode;
+  return Math.max(m.graceMin, m.graceStart - ((m.graceStart - m.graceMin) * S.cleared) / m.graceSteps);
+}
+
+// 0..1 of the grace period left while the Krabbel waits (score mode), else null.
+function graceLeft() {
+  const k = S.k;
+  if (!k || k.state !== "wait" || !isFinite(k.graceTotal)) return null;
+  return clamp((k.graceUntil - S.time) / (k.graceTotal * 1000), 0, 1);
+}
+
 function fail(o) {
   const k = S.k;
   S.failType = { connect: "verbinden", ladder: "ladder", jump: "springen", duck: "bukken" }[o.t];
@@ -492,12 +507,13 @@ function updateKrabbel(dt) {
     if (o && !o.cleared && nx >= o.stop) {
       if (canPass(o, S.time - CFG.jumpBuffer)) {
         startPass(o);
-      } else if (S.mode.wait) {
+      } else {
+        // Wait at the obstacle. Time mode: as long as needed. Score mode: a grace period.
         nx = o.stop;
         k.state = "wait";
         k.waitSince = S.time;
-      } else {
-        return fail(o);
+        k.graceTotal = S.mode.wait ? Infinity : graceNow();
+        k.graceUntil = S.time + k.graceTotal * 1000;
       }
     }
     if (k.state === "walk" || k.state === "duck") k.x = nx;
@@ -507,6 +523,8 @@ function updateKrabbel(dt) {
     if (canPass(o, k.waitSince - CFG.jumpBuffer)) {
       k.state = "walk";
       startPass(o);
+    } else if (S.time > k.graceUntil) {
+      return fail(o);
     }
   } else if (k.state === "climb") {
     k.y = Math.min(k.climbTo, k.y + CFG.climbSpeed * dt);
@@ -675,7 +693,7 @@ function text(str, x, y, size, color = C.dark, align = "center", weight = 700) {
 function styleApi() {
   return {
     ctx, W, H, S, CFG, SIZE, tracker, silLayer, silCtx,
-    px, levelY, FLOOR, ownersOf, connectAngle, nextObstacle, allObs, finishX, fmtTime, presentCount, playerFits, posTolFor, chainArms, togetherFits, holdOf,
+    px, levelY, FLOOR, ownersOf, connectAngle, nextObstacle, allObs, finishX, fmtTime, presentCount, playerFits, posTolFor, chainArms, togetherFits, holdOf, graceLeft,
   };
 }
 
@@ -969,6 +987,19 @@ function drawPrompt(o, scale, now, isNext) {
   ctx.stroke();
   const fg = now ? "#fff" : C.dark;
   pictogram(o.t === "connect" && S.duo && o.owner === 3 ? "connect2" : o.t, x, y, s, fg, o.t === "connect" ? connectAngle(o) : 0);
+  const left = isNext ? graceLeft() : null;
+  if (left !== null) {
+    ctx.lineCap = "round";
+    ctx.lineWidth = s * 0.09;
+    ctx.strokeStyle = C.light;
+    ctx.beginPath();
+    ctx.arc(x, y, s * 0.95, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = C.dark;
+    ctx.beginPath();
+    ctx.arc(x, y, s * 0.95, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left);
+    ctx.stroke();
+  }
   if (S.duo) {
     const label = o.owner === 3 ? "1+2" : String(o.owner);
     rr(x + s * 0.32, y - s * 0.86, s * 0.62, s * 0.36, s * 0.18);
