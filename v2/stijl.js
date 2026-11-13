@@ -755,7 +755,7 @@ function drawConnect(o) {
   const a = A.px(o.x0), b = A.px(o.x1);
   if (b < -60 || a > W + 60) return;
   const Ap = { x: a, y: A.levelY(o.la) }, Bp = { x: b, y: A.levelY(o.lb) };
-  const f = o.solved ? 1 : o.match / S.mode.hold;
+  const f = o.solved ? 1 : o.match / A.holdOf(o);
   if (!o.solved) {
     // where the line will come: a dotted pencil guide
     const n = Math.max(4, Math.round(Math.hypot(Bp.x - Ap.x, Bp.y - Ap.y) / (22 * u)));
@@ -805,7 +805,7 @@ function drawArmFeedback(o, Ap, Bp) {
 function drawLadder(o) {
   const a = A.px(o.x0);
   if (a < -100 || a > W + 100) return;
-  const f = o.solved ? 1 : o.match / S.mode.hold;
+  const f = o.solved ? 1 : o.match / A.holdOf(o);
   if (f <= 0) return;
   const y0 = A.levelY(o.base), y1 = A.levelY(o.top) - 8 * u;
   const lx = a - H * 0.035, w = H * 0.03, top = lerp(y0, y1, clamp(f, 0, 1));
@@ -882,7 +882,7 @@ function puntjeTarget(t) {
   const a = A.px(o.x0), b = A.px(o.x1), c = A.px(o.xc);
   if (o.t === "connect" && !o.solved) {
     const Ap = { x: a, y: A.levelY(o.la) }, Bp = { x: b, y: A.levelY(o.lb) };
-    const f = o.match / S.mode.hold;
+    const f = o.match / A.holdOf(o);
     if (f > 0.02) {
       return { x: lerp(Ap.x, Bp.x, f), y: lerp(Ap.y, Bp.y, f), ang: Math.atan2(Bp.y - Ap.y, Bp.x - Ap.x) + 0.38, pose: "draw", squash: 1 };
     }
@@ -892,7 +892,7 @@ function puntjeTarget(t) {
   if (o.t === "ladder") {
     const y0 = A.levelY(o.base), y1 = A.levelY(o.top);
     if (o.solved) return { x: c, y: y1 - 4 * u - Math.abs(Math.sin(t * 8)) * 20 * u, ang: 0, pose: "cheer", squash: 1 };
-    const f = o.match / S.mode.hold;
+    const f = o.match / A.holdOf(o);
     if (f > 0.02) return { x: a - H * 0.035 + H * 0.03, y: lerp(y0, y1, f), ang: 0.38, pose: "draw", squash: 1 };
     return { x: a - 70 * u, y: y0 - hop * 0.4, ang: 0, pose: "cheer", squash: 1 };
   }

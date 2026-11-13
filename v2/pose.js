@@ -41,6 +41,10 @@ export const POSE = {
   learnMs: 1000, // first ms after appearing: learn the normal height fast
   maxJumpMs: 900, // longer "in the air" = not a jump, re-measure
   maxDuckMs: 6000, // longer ducking = re-measure
+
+  // Hand in hand (duo bridges / ramps), in shoulder widths, on the camera image
+  handOuterReach: 0.8, // each outer hand at least this far beyond its own shoulders
+  handTouch: 1.2, // the two inner hands closer than this = holding hands
 };
 
 const L = { nose: 0, lSh: 11, rSh: 12, lEl: 13, rEl: 14, lWr: 15, rWr: 16, lHip: 23, rHip: 24, lKn: 25, rKn: 26, lAn: 27, rAn: 28 };
@@ -288,4 +292,28 @@ function armLine(b) {
   if (angleBetween({ x: right.wr.x - right.sh.x, y: right.wr.y - right.sh.y }, line) > tol) return null;
   if (angleBetween({ x: left.wr.x - left.sh.x, y: left.wr.y - left.sh.y }, { x: -line.x, y: -line.y }) > tol) return null;
   return deg(Math.atan2(-line.y, line.x)); // + = rising to the right
+}
+
+// Two players hand in hand, measured on the camera image (real proportions,
+// mirrored like the screen). Returns null, or { angle, touching }:
+//   angle    : line from the outer hand of the left player to the outer hand
+//              of the right player, in degrees (+ = rising to the right)
+//   touching : the two inner hands are together
+// null when both outer arms are not stretched outwards.
+export function handInHand(players) {
+  const [a, b] = players;
+  if (!a.present || !b.present || !a.lms || !b.lms) return null;
+  const P = (p, k) => ({ x: -p.lms[k].x, y: p.lms[k].y, v: p.lms[k].v });
+  const shX = (p) => (P(p, L.lSh).x + P(p, L.rSh).x) / 2;
+  const [Lp, Rp] = shX(a) <= shX(b) ? [a, b] : [b, a];
+  const sw = (Lp.shW + Rp.shW) / 2 || 0.05;
+  const wrists = (p) => [P(p, L.lWr), P(p, L.rWr)].sort((m, n) => m.x - n.x);
+  const [Lout, Lin] = wrists(Lp);
+  const [Rin, Rout] = wrists(Rp);
+  if (Lout.v < POSE.minVisibility || Rout.v < POSE.minVisibility) return null;
+  const LshMin = Math.min(P(Lp, L.lSh).x, P(Lp, L.rSh).x);
+  const RshMax = Math.max(P(Rp, L.lSh).x, P(Rp, L.rSh).x);
+  if (LshMin - Lout.x < POSE.handOuterReach * sw || Rout.x - RshMax < POSE.handOuterReach * sw) return null;
+  const touching = Math.hypot(Lin.x - Rin.x, Lin.y - Rin.y) < POSE.handTouch * sw;
+  return { angle: deg(Math.atan2(-(Rout.y - Lout.y), Rout.x - Lout.x)), touching };
 }

@@ -10,9 +10,9 @@
 // Keyboard (for testing without camera), player 1 / player 2:
 //   connect B / N   ladder L / O   jump J / U   duck (hold) K / I
 // =====================================================================
-import { POSE, Tracker, initCamera, initPose } from "./pose.js";
-import { SvgCtx } from "./svgctx.js";
-import { drawStyled } from "./stijl.js";
+import { POSE, Tracker, initCamera, initPose, handInHand } from "./pose.js?v=20261113";
+import { SvgCtx } from "./svgctx.js?v=20261113";
+import { drawStyled } from "./stijl.js?v=20261113";
 
 // ---------------------------------------------------------------------
 // Settings
@@ -25,6 +25,7 @@ const CFG = {
   angleTol: 16, // degrees. How close your arm line must be to the line between the points.
   posTol: { solo: 0.09, duo: 0.14 }, // W. How far from the obstacle you may stand.
   togetherWidth: 2.2, // Obstacles for both players (1+2) are this many times wider, so two children fit side by side.
+  togetherHold: 0.5, // s. Hand in hand: hold the right line this long (a lucky moment is not enough).
   jumpBuffer: 900, // ms. A jump this long before the Krabbel arrives still counts.
   duckBuffer: 350, // ms.
   promptAhead: 0.32, // pages. The next obstacle's instruction grows when the Krabbel is this close.
@@ -199,6 +200,7 @@ function makePage(index, specs, startLevel, duo) {
       wait: 0, // seconds the Krabbel waited here
       seenAt: null,
       solveTime: null,
+      hold: together ? CFG.togetherHold : null, // seconds to hold, null = the mode's default
     };
     if (o.t === "connect") {
       let dh = sp.dh || 0;
@@ -230,7 +232,9 @@ function buildCourse(mode, duo) {
   }
   let lv = 0;
   COURSES[mode.course].forEach((specs, i) => {
-    const sp = specs.map((s, j) => ({ ...s, owner: duo && i % 3 === 2 && j === 1 ? 3 : undefined }));
+    // Every third level the bridge / ramp is for both players together (never a jump, duck or ladder).
+    const together = duo && i % 3 === 2 ? specs.findIndex((s) => s.t === "connect") : -1;
+    const sp = specs.map((s, j) => ({ ...s, owner: j === together ? 3 : undefined }));
     const p = makePage(i, sp, lv, duo);
     pages.push(p);
     lv = p.end;
@@ -250,8 +254,11 @@ function extendCourse() {
       const pick = r();
       const t = pick < 0.4 ? "connect" : pick < 0.6 ? "jump" : pick < 0.8 ? "duck" : "ladder";
       const dh = [0, 0.12, -0.12, 0.18, -0.18][Math.floor(r() * 5)];
-      specs.push({ t, dh, owner: S.duo && i % 3 === 0 && j === 0 ? 3 : undefined });
+      specs.push({ t, dh });
     }
+    // Every third page: the first bridge / ramp is for both players together.
+    const together = S.duo && i % 3 === 0 ? specs.find((s) => s.t === "connect") : null;
+    if (together) together.owner = 3;
     S.pages.push(makePage(i, specs, prev.end, S.duo));
   }
 }
@@ -361,31 +368,24 @@ function posTolFor(o) {
   return (S.duo ? CFG.posTol.duo : CFG.posTol.solo) * W;
 }
 
-// Two players holding hands: the line from the outer hand of the left player
-// to the outer hand of the right player. Its angle in degrees, or null.
-// Both outer arms must be stretched outwards, both inner hands point inwards.
+// Seconds an obstacle's gesture must be held.
+const holdOf = (o) => o.hold || S.mode.hold;
+
+// Hand in hand (measured in pose.js on the camera image): the angle of the line
+// from outer hand to outer hand, or null when the outer arms are not stretched.
 function chainArms() {
   if (!S.duo) return null;
-  const [a, b] = tracker.players;
-  if (!a.present || !b.present || !a.body || !b.body) return null;
-  const [Lb, Rb] = a.cx <= b.cx ? [a.body, b.body] : [b.body, a.body];
-  const shw = (q) => Math.hypot(q.lSh.x - q.rSh.x, q.lSh.y - q.rSh.y) || 1;
-  const sw = (shw(Lb) + shw(Rb)) / 2;
-  const [Lout, Lin] = Lb.lWr.x < Lb.rWr.x ? [Lb.lWr, Lb.rWr] : [Lb.rWr, Lb.lWr];
-  const [Rin, Rout] = Rb.lWr.x < Rb.rWr.x ? [Rb.lWr, Rb.rWr] : [Rb.rWr, Rb.lWr];
-  const LshMin = Math.min(Lb.lSh.x, Lb.rSh.x), LshMax = Math.max(Lb.lSh.x, Lb.rSh.x);
-  const RshMin = Math.min(Rb.lSh.x, Rb.rSh.x), RshMax = Math.max(Rb.lSh.x, Rb.rSh.x);
-  if (LshMin - Lout.x < 0.8 * sw || Rout.x - RshMax < 0.8 * sw) return null; // outer arms stretched out
-  if (Lin.x < LshMax - 0.2 * sw || Rin.x > RshMin + 0.2 * sw) return null; // inner hands towards each other
-  return (Math.atan2(-(Rout.y - Lout.y), Rout.x - Lout.x) * 180) / Math.PI;
+  const h = handInHand(tracker.players);
+  return h ? h.angle : null;
 }
 
-// A together-connect is solved by both players separately, or hand in hand.
+// A together bridge / ramp is solved hand in hand only: inner hands together,
+// outer hands on one line with the right angle.
 function togetherFits(o) {
   if (!(S.duo && o.owner === 3 && o.t === "connect")) return false;
   if (sim[0].connect && sim[1].connect) return true;
-  const a = chainArms();
-  return a !== null && Math.abs(a - connectAngle(o)) <= CFG.angleTol;
+  const h = handInHand(tracker.players);
+  return !!h && h.touching && Math.abs(h.angle - connectAngle(o)) <= CFG.angleTol;
 }
 
 function playerFits(i, o) {
@@ -421,9 +421,9 @@ function updateSolving(dt) {
     if (o.solved || o.cleared || (o.t !== "connect" && o.t !== "ladder")) continue;
     if (o.page !== page) continue;
     if (o.seenAt === null) o.seenAt = S.runTime;
-    const ok = ownersOf(o).every((i) => playerFits(i, o)) || togetherFits(o);
+    const ok = S.duo && o.owner === 3 ? togetherFits(o) : ownersOf(o).every((i) => playerFits(i, o));
     o.match = ok ? o.match + dt : Math.max(0, o.match - dt * 2);
-    if (o.match >= S.mode.hold) {
+    if (o.match >= holdOf(o)) {
       o.solved = true;
       o.solveTime = S.runTime - o.seenAt;
       burst(o);
@@ -675,7 +675,7 @@ function text(str, x, y, size, color = C.dark, align = "center", weight = 700) {
 function styleApi() {
   return {
     ctx, W, H, S, CFG, SIZE, tracker, silLayer, silCtx,
-    px, levelY, FLOOR, ownersOf, connectAngle, nextObstacle, allObs, finishX, fmtTime, presentCount, playerFits, posTolFor, chainArms, togetherFits,
+    px, levelY, FLOOR, ownersOf, connectAngle, nextObstacle, allObs, finishX, fmtTime, presentCount, playerFits, posTolFor, chainArms, togetherFits, holdOf,
   };
 }
 
@@ -800,7 +800,7 @@ function drawObstacle(o) {
         ctx.stroke();
       }
     }
-    if (o.match > 0 && !o.solved) ring(o.xc, (o.la + o.lb) / 2, o.match / S.mode.hold);
+    if (o.match > 0 && !o.solved) ring(o.xc, (o.la + o.lb) / 2, o.match / holdOf(o));
   } else if (o.t === "ladder") {
     const y0 = levelY(o.base), y1 = levelY(o.top);
     ctx.fillStyle = C.block;
@@ -820,7 +820,7 @@ function drawObstacle(o) {
       }
       ctx.stroke();
     }
-    if (o.match > 0 && !o.solved) ring(o.xc, o.top + 0.05, o.match / S.mode.hold);
+    if (o.match > 0 && !o.solved) ring(o.xc, o.top + 0.05, o.match / holdOf(o));
   } else if (o.t === "jump") {
     const y = levelY(o.base);
     ctx.fillStyle = C.block;
@@ -1211,8 +1211,9 @@ function drawCalibration() {
     }
   }
   if (S.duo) {
-    const ch = chainArms();
-    text(ch === null ? "Hand in hand: —" : `Hand in hand ${Math.round(ch)}°`, W / 2, H * 0.06, H * 0.03, ch === null ? "#bbb" : C.dark, "center", 700);
+    const h = handInHand(tracker.players);
+    const label = !h ? "Hand in hand: —" : h.touching ? `Hand in hand ${Math.round(h.angle)}°` : "Armen wijd, nu nog elkaars hand";
+    text(label, W / 2, H * 0.06, H * 0.03, h && h.touching ? C.dark : "#bbb", "center", 700);
   }
   if (!(ctx instanceof SvgCtx)) text(`${S.duo ? "Duo" : "Solo"} · Esc = menu`, W - H * 0.04, H - H * 0.03, H * 0.018, "#aaa", "right", 500);
   if (S.debug) drawDebug();
