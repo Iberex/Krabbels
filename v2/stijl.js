@@ -1161,12 +1161,60 @@ function drawIntro() {
   const t = S.phaseT;
   hudText("Zo speel je", W / 2, H * 0.12, H * 0.07, C.ink, "center", 900);
   const cards = [
-    { pics: [S.duo ? "connect2" : "connect"], label: S.duo ? "Hand in hand = brug" : "Armen wijd = brug" },
-    { pics: ["ladder"], label: "Armen omhoog = ladder" },
+    { pics: [S.duo ? "connect2" : "connect"], label: S.duo ? "Hand in hand = brug" : "Armen wijd = brug", step: !S.duo, sub: S.duo ? "Waar je maar wil" : "Ga erbij staan" },
+    { pics: ["ladder"], label: "Armen omhoog = ladder", step: true, sub: "Ga erbij staan" },
     { pics: ["jump", "duck"], label: "Spring of buk" },
   ];
   const cw = Math.min(W * 0.27, H * 0.52), ch = cw * 1.14, gap = cw * 0.12;
   const x0 = W / 2 - (3 * cw + 2 * gap) / 2, y0 = H * 0.21;
+  // stepping: stand next to the obstacle, step in front of it, do the gesture, then it gets drawn
+  const sT = t % 2.8;
+  const move = sT < 0.6 ? 0 : sT < 1.1 ? (1 - Math.cos(((sT - 0.6) / 0.5) * Math.PI)) / 2 : 1;
+  const armed = sT >= 1.1, grow = clamp((sT - 1.4) / 1.0, 0, 1), arrowOn = sT < 1.1;
+  // a small soft body in the player's colour, like in the game
+  const figure = (fx, footY, h, arms) => {
+    const col = "rgba(240,138,110,0.6)", hr = h * 0.11, sh = footY - h * 0.72, hip = footY - h * 0.42;
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.strokeStyle = col;
+    ctx.fillStyle = col;
+    ctx.lineWidth = h * 0.13;
+    ctx.beginPath();
+    ctx.moveTo(fx, sh);
+    ctx.lineTo(fx, hip);
+    ctx.stroke();
+    ctx.lineWidth = h * 0.09;
+    ctx.beginPath();
+    ctx.moveTo(fx - h * 0.04, hip);
+    ctx.lineTo(fx - h * 0.08, footY);
+    ctx.moveTo(fx + h * 0.04, hip);
+    ctx.lineTo(fx + h * 0.08, footY);
+    const aw = h * 0.36;
+    if (arms === "side") {
+      ctx.moveTo(fx - aw, sh + h * 0.02);
+      ctx.lineTo(fx + aw, sh + h * 0.02);
+    } else if (arms === "up") {
+      ctx.moveTo(fx - h * 0.06, sh);
+      ctx.lineTo(fx - h * 0.12, sh - h * 0.3);
+      ctx.moveTo(fx + h * 0.06, sh);
+      ctx.lineTo(fx + h * 0.12, sh - h * 0.3);
+    } else {
+      ctx.moveTo(fx - h * 0.06, sh);
+      ctx.lineTo(fx - h * 0.1, sh + h * 0.28);
+      ctx.moveTo(fx + h * 0.06, sh);
+      ctx.lineTo(fx + h * 0.1, sh + h * 0.28);
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(fx, sh - hr * 1.3, hr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+  const arrow = (ax, ay, len) => {
+    if (!arrowOn || Math.sin(t * 12) < -0.3) return;
+    strokePts(ctx, [[ax, ay], [ax + len, ay]], C.navy, len * 0.18);
+    strokePts(ctx, [[ax + len * 0.6, ay - len * 0.32], [ax + len, ay], [ax + len * 0.6, ay + len * 0.32]], C.navy, len * 0.18);
+  };
   cards.forEach((c, i) => {
     const x = x0 + i * (cw + gap), appear = clamp((t - i * 0.35) / 0.4, 0, 1);
     const rot = [-1.5, 1, -0.8][i] * (Math.PI / 180);
@@ -1186,20 +1234,19 @@ function drawIntro() {
     hudText(String(i + 1), cw * 0.1, cw * 0.11, cw * 0.09, C.navy, "center", 900);
     const pic = c.pics[Math.floor(t / 1.2) % c.pics.length];
     const st = sticker(pic, true, 0, H * 0.085 * 1.35);
-    const k = (cw * 0.5) / st.w, bob = Math.sin(t * 4 + i) * cw * 0.015;
+    const k = (cw * 0.42) / st.w, bob = Math.sin(t * 4 + i) * cw * 0.015;
     ctx.save();
-    ctx.translate(cw / 2, ch * 0.3 + bob);
+    ctx.translate(cw / 2, ch * 0.25 + bob);
     ctx.scale(k * 1.6, k * 1.6);
     ctx.drawImage(st.c, -st.w / 2, -st.h / 2, st.w, st.h);
     ctx.restore();
-    // mini scene: what happens in the game, with Puntje
-    const f = clamp((t % 1.8) / 1.4, 0, 1), gy = ch * 0.74;
+    const gy = ch * 0.68, fh = cw * 0.3;
     const ground = (a, b) => {
-      fillPts(ctx, rect(a, gy, b, gy + cw * 0.07), C.green);
+      fillPts(ctx, rect(a, gy, b, gy + cw * 0.06), C.green);
       strokePts(ctx, [[a, gy + 2 * u], [b, gy + 2 * u]], C.greenD, 4 * u);
     };
     const { s: ps, ax, ay } = puntjeSprite(i === 0 ? "draw" : "cheer");
-    const pk = (cw * 0.22) / ps.h;
+    const pk = (cw * 0.2) / ps.h;
     const drawP = (px, py, ang = 0, sq = 1) => {
       ctx.save();
       ctx.translate(px, py);
@@ -1209,22 +1256,35 @@ function drawIntro() {
       ctx.restore();
     };
     if (i === 0) {
-      const a = cw * 0.24, b = cw * 0.76;
+      const a = cw * 0.3, b = cw * 0.7;
+      let f = clamp((t % 1.8) / 1.4, 0, 1);
+      if (c.step) {
+        const fx = lerp(cw * 0.15, (a + b) / 2, move);
+        figure(fx, gy + cw * 0.05, fh, armed ? "side" : "down");
+        arrow(fx + fh * 0.22, gy - fh * 0.55, fh * 0.42);
+        f = grow;
+      }
       ground(cw * 0.06, a);
       ground(b, cw * 0.94);
-      strokePts(ctx, [[a, gy], [lerp(a, b, f), gy]], C.line, 9 * u);
+      if (f > 0) strokePts(ctx, [[a, gy], [lerp(a, b, f), gy]], C.line, 9 * u);
       for (const px of [a, b]) fillPts(ctx, circle(px, gy, 8 * u, 14), C.orange);
-      drawP(lerp(a, b, f), gy, 0.38);
+      if (f > 0 && f < 1) drawP(lerp(a, b, f), gy, 0.38);
+      else if (f >= 1) drawP(b + cw * 0.08, gy - Math.abs(Math.sin(t * 8)) * cw * 0.04);
     } else if (i === 1) {
+      const wx = cw * 0.62, top = gy - cw * 0.27;
+      const fx = lerp(cw * 0.2, wx + cw * 0.06, move);
       ground(cw * 0.06, cw * 0.94);
-      const wx = cw * 0.55, top = gy - cw * 0.3;
       fillPts(ctx, rect(wx, top, wx + cw * 0.12, gy), C.yellow);
       strokePts(ctx, rect(wx, top, wx + cw * 0.12, gy), "#8A6512", 3 * u, 1, true);
-      const lx = wx - cw * 0.1, up = lerp(gy, top, f);
-      strokePts(ctx, [[lx, gy], [lx, up]], "#8A5A28", 4 * u);
-      strokePts(ctx, [[lx + cw * 0.07, gy], [lx + cw * 0.07, up]], "#8A5A28", 4 * u);
-      for (let y = gy - cw * 0.04; y > up; y -= cw * 0.05) strokePts(ctx, [[lx, y], [lx + cw * 0.07, y]], "#8A5A28", 3.5 * u);
-      drawP(wx + cw * 0.06, f >= 1 ? top - Math.abs(Math.sin(t * 8)) * cw * 0.04 : top);
+      figure(fx, gy + cw * 0.05, fh, armed ? "up" : "down");
+      arrow(fx + fh * 0.22, gy - fh * 0.55, fh * 0.42);
+      const lx = wx - cw * 0.1, up = lerp(gy, top, grow);
+      if (grow > 0) {
+        strokePts(ctx, [[lx, gy], [lx, up]], "#8A5A28", 4 * u);
+        strokePts(ctx, [[lx + cw * 0.07, gy], [lx + cw * 0.07, up]], "#8A5A28", 4 * u);
+        for (let y = gy - cw * 0.04; y > up; y -= cw * 0.05) strokePts(ctx, [[lx, y], [lx + cw * 0.07, y]], "#8A5A28", 3.5 * u);
+      }
+      if (grow >= 1) drawP(wx + cw * 0.06, top - Math.abs(Math.sin(t * 8)) * cw * 0.04);
     } else {
       ground(cw * 0.06, cw * 0.94);
       if (pic === "jump") {
@@ -1233,15 +1293,16 @@ function drawIntro() {
         drawP(cw * 0.3, gy - Math.abs(Math.sin(t * 5)) * cw * 0.12);
       } else {
         const by = gy - cw * 0.13;
-        fillPts(ctx, rect(cw * 0.45, ch * 0.5, cw * 0.6, by - cw * 0.04), C.purple);
+        fillPts(ctx, rect(cw * 0.45, ch * 0.46, cw * 0.6, by - cw * 0.04), C.purple);
         fillPts(ctx, [[cw * 0.45, by - cw * 0.04], [cw * 0.6, by - cw * 0.04], [cw * 0.525, by]], C.wood);
         drawP(cw * 0.3, gy, 0, 0.62 + 0.08 * Math.sin(t * 6));
       }
     }
-    hudText(c.label, cw / 2, ch * 0.9, cw * 0.075, C.ink, "center", 800);
+    if (c.sub) hudText(c.sub, cw / 2, ch * 0.81, cw * 0.06, "#6A6A72", "center", 700);
+    hudText(c.label, cw / 2, ch * 0.91, cw * 0.075, C.ink, "center", 800);
     ctx.restore();
   });
-  const bw = W * 0.3, by = H * 0.87, f = clamp(t / 6.5, 0, 1);
+  const bw = W * 0.3, by = H * 0.87, f = clamp(t / A.CFG.introTime, 0, 1);
   strokePts(ctx, [[W / 2 - bw / 2, by], [W / 2 + bw / 2, by]], "rgba(43,43,51,0.15)", 10 * u);
   strokePts(ctx, [[W / 2 - bw / 2, by], [W / 2 - bw / 2 + bw * f, by]], C.line, 10 * u);
   hudText("Spatie = meteen starten", W / 2, H * 0.93, H * 0.024, "#8A7F70", "center", 600);

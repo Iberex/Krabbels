@@ -10,8 +10,8 @@
 // Keyboard (for testing without camera), player 1 / player 2:
 //   connect B / N   ladder L / O   jump J / U   duck (hold) K / I
 // =====================================================================
-import { POSE, Tracker, initCamera, initPose, handInHand } from "./pose.js?v=20261113c";
-import { SvgCtx } from "./svgctx.js?v=20261113c";
+import { POSE, Tracker, initCamera, initPose, handInHand } from "./pose.js?v=20261113d";
+import { SvgCtx } from "./svgctx.js?v=20261113d";
 
 // ---------------------------------------------------------------------
 // Settings
@@ -1028,7 +1028,14 @@ function pictogram(type, x, y, s, color, angle = 0) {
     ctx.stroke();
   };
   const u = s * 0.1;
-  if (type === "connect2") {
+  if (type === "stand") {
+    ctx.beginPath();
+    ctx.arc(0, -3.2 * u, s * 0.085, 0, Math.PI * 2);
+    ctx.fill();
+    line([0, -2.2 * u, 0, 1 * u]);
+    line([-1.2 * u, 4 * u, 0, 1 * u, 1.2 * u, 4 * u]);
+    line([-1.3 * u, 0.6 * u, -0.5 * u, -1.6 * u, 0.5 * u, -1.6 * u, 1.3 * u, 0.6 * u]);
+  } else if (type === "connect2") {
     // two children hand in hand, outer arms along the line
     const a = (-angle * Math.PI) / 180, L = 2.2 * u;
     for (const sx of [-1.9, 1.9]) {
@@ -1184,8 +1191,8 @@ function drawReady() {
 
 // --- short explanation before the countdown: three cards ---------------------
 const INTRO_CARDS = () => [
-  { pics: [S.duo ? "connect2" : "connect"], label: S.duo ? "Hand in hand = brug" : "Armen wijd = brug" },
-  { pics: ["ladder"], label: "Armen omhoog = ladder" },
+  { pics: [S.duo ? "connect2" : "connect"], label: S.duo ? "Hand in hand = brug" : "Armen wijd = brug", step: !S.duo, sub: S.duo ? "Waar je maar wil" : "Ga erbij staan" },
+  { pics: ["ladder"], label: "Armen omhoog = ladder", step: true, sub: "Ga erbij staan" },
   { pics: ["jump", "duck"], label: "Spring of buk" },
 ];
 function drawIntro() {
@@ -1195,6 +1202,22 @@ function drawIntro() {
   text("Zo speel je", W / 2, H * 0.13, H * 0.06);
   const cw = Math.min(W * 0.27, H * 0.52), ch = cw * 1.12, gap = cw * 0.12;
   const x0 = W / 2 - (3 * cw + 2 * gap) / 2, y0 = H * 0.22;
+  // Stepping animation for cards 1 + 2: stand next to the obstacle, step in front of it, do the gesture.
+  const s = t % 2.8;
+  const move = s < 0.6 ? 0 : s < 1.1 ? ease((s - 0.6) / 0.5) : 1;
+  const armed = s >= 1.1, grow = clamp((s - 1.4) / 1.0, 0, 1), arrowOn = s < 1.1;
+  const stepFig = (fx, gy, pic, size) => pictogram(armed ? pic : "stand", fx, gy - size * 0.42, size, "#9a9a9a", 0);
+  const arrow = (ax, ay, len) => {
+    if (!arrowOn || Math.sin(t * 12) < -0.3) return;
+    ctx.fillStyle = C.dark;
+    ctx.fillRect(ax, ay - len * 0.08, len * 0.6, len * 0.16);
+    ctx.beginPath();
+    ctx.moveTo(ax + len, ay);
+    ctx.lineTo(ax + len * 0.55, ay - len * 0.3);
+    ctx.lineTo(ax + len * 0.55, ay + len * 0.3);
+    ctx.closePath();
+    ctx.fill();
+  };
   INTRO_CARDS().forEach((c, i) => {
     const x = x0 + i * (cw + gap), appear = clamp((t - i * 0.35) / 0.4, 0, 1);
     ctx.save();
@@ -1209,17 +1232,22 @@ function drawIntro() {
     text(String(i + 1), x + cw * 0.1, y0 + cw * 0.1, cw * 0.08, C.mid);
     const pic = c.pics[Math.floor(t / 1.2) % c.pics.length];
     const bob = Math.sin(t * 4 + i) * cw * 0.015;
-    pictogram(pic, x + cw / 2, y0 + ch * 0.32 + bob, cw * 0.42, C.dark, 0);
-    // mini scene: what happens in the game
-    const f = (t % 1.8) / 1.4, gy = y0 + ch * 0.72;
-    ctx.strokeStyle = C.dark;
-    ctx.fillStyle = C.dark;
+    pictogram(pic, x + cw / 2, y0 + ch * 0.27 + bob, cw * 0.34, C.dark, 0);
+    const gy = y0 + ch * 0.7, fs = cw * 0.24;
     ctx.lineCap = "round";
     if (i === 0) {
-      const a = x + cw * 0.25, b = x + cw * 0.75;
+      const a = x + cw * 0.3, b = x + cw * 0.7;
       ctx.fillStyle = C.ground;
-      ctx.fillRect(x + cw * 0.08, gy, a - x - cw * 0.08, cw * 0.06);
-      ctx.fillRect(b, gy, x + cw * 0.92 - b, cw * 0.06);
+      ctx.fillRect(x + cw * 0.06, gy, a - x - cw * 0.06, cw * 0.06);
+      ctx.fillRect(b, gy, x + cw * 0.94 - b, cw * 0.06);
+      let f = (t % 1.8) / 1.4;
+      if (c.step) {
+        const fx = lerp(x + cw * 0.14, (a + b) / 2, move);
+        stepFig(fx, gy, "connect", fs);
+        arrow(fx + fs * 0.35, gy - fs * 0.45, fs * 0.45);
+        f = grow;
+      }
+      ctx.strokeStyle = C.dark;
       ctx.lineWidth = cw * 0.03;
       ctx.beginPath();
       ctx.moveTo(a, gy);
@@ -1232,31 +1260,41 @@ function drawIntro() {
         ctx.fill();
       }
     } else if (i === 1) {
-      const wx = x + cw * 0.55, top = gy - cw * 0.3;
+      const wx = x + cw * 0.62, top = gy - cw * 0.28;
+      ctx.fillStyle = C.ground;
+      ctx.fillRect(x + cw * 0.06, gy, cw * 0.88, cw * 0.04);
+      const fx = lerp(x + cw * 0.2, wx + cw * 0.06, move);
       ctx.fillStyle = C.block;
       ctx.fillRect(wx, top, cw * 0.12, gy - top);
+      ctx.save();
+      ctx.globalAlpha *= 0.8;
+      stepFig(fx, gy, "ladder", fs);
+      ctx.restore();
+      arrow(fx + fs * 0.35, gy - fs * 0.45, fs * 0.45);
+      ctx.strokeStyle = C.dark;
       ctx.lineWidth = cw * 0.015;
-      const lx = wx - cw * 0.1, up = lerp(gy, top, clamp(f, 0, 1));
-      ctx.beginPath();
-      ctx.moveTo(lx, gy);
-      ctx.lineTo(lx, up);
-      ctx.moveTo(lx + cw * 0.07, gy);
-      ctx.lineTo(lx + cw * 0.07, up);
-      for (let y = gy - cw * 0.04; y > up; y -= cw * 0.05) {
-        ctx.moveTo(lx, y);
-        ctx.lineTo(lx + cw * 0.07, y);
+      const lx = wx - cw * 0.1, up = lerp(gy, top, grow);
+      if (grow > 0) {
+        ctx.beginPath();
+        ctx.moveTo(lx, gy);
+        ctx.lineTo(lx, up);
+        ctx.moveTo(lx + cw * 0.07, gy);
+        ctx.lineTo(lx + cw * 0.07, up);
+        for (let y = gy - cw * 0.04; y > up; y -= cw * 0.05) {
+          ctx.moveTo(lx, y);
+          ctx.lineTo(lx + cw * 0.07, y);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
-      ctx.fillStyle = C.ground;
-      ctx.fillRect(x + cw * 0.08, gy, cw * 0.84, cw * 0.04);
     } else {
       ctx.fillStyle = C.ground;
-      ctx.fillRect(x + cw * 0.08, gy, cw * 0.84, cw * 0.04);
+      ctx.fillRect(x + cw * 0.06, gy, cw * 0.88, cw * 0.04);
       ctx.fillStyle = C.block;
       if (pic === "jump") ctx.fillRect(x + cw * 0.46, gy - cw * 0.08, cw * 0.08, cw * 0.08);
-      else ctx.fillRect(x + cw * 0.42, y0 + ch * 0.58, cw * 0.16, gy - cw * 0.12 - (y0 + ch * 0.58));
+      else ctx.fillRect(x + cw * 0.42, y0 + ch * 0.5, cw * 0.16, gy - cw * 0.12 - (y0 + ch * 0.5));
     }
-    text(c.label, x + cw / 2, y0 + ch * 0.88, cw * 0.075, C.dark);
+    if (c.sub) text(c.sub, x + cw / 2, y0 + ch * 0.82, cw * 0.06, C.mid, "center", 600);
+    text(c.label, x + cw / 2, y0 + ch * 0.92, cw * 0.075, C.dark);
     ctx.restore();
   });
   const bw = W * 0.3, by = H * 0.86, f = clamp(t / CFG.introTime, 0, 1);
