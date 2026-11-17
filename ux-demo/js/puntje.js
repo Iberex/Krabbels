@@ -36,9 +36,15 @@ export const BASE = {
   happy: 0, // ^ ^ eyes
   brow: 0, browTilt: 0, // brows: raise (-1..1), tilt (+ = worried)
   smile: 0.5, mouth: 0, // mouth: smile (-1..1), open (0..1)
-  draw: 0, // length of the line Puntje draws with his point (tekenen)
-  prop: null, // "hand" = a little pencil in his right hand, or { x, y, rot } flying
+  tipDown: 0, // 0..1: 1 = his point rests exactly on the paper (for drawing / landing)
+  line: null, // [x0, x1]: a line on the paper (stage coords), e.g. what he draws
+  prop: null, // "hand" = a little pencil in his right hand, or { x, y, rot, s } flying
 };
+
+// Where his point is (stage coords) for a pose: used to keep a drawn line glued to the point.
+export function tipX(p) {
+  return p.x - Math.sin(p.lean * Math.PI / 180) * CENTER * p.sy;
+}
 
 // Interpolate key poses: keys = [[time (0..1), {fields}], ...]. Missing fields keep their previous value.
 export function keys(list, u) {
@@ -86,16 +92,18 @@ export function drawPuntje(g, p, x, y, s = 1, { flip = false, ground = true } = 
 
   // shadow on the ground: smaller and lighter the higher he floats
   if (ground) {
-    const k = clamp(1 - p.air / 160, 0.3, 1);
+    const k = clamp(1 - Math.max(0, p.air) / 160, 0.3, 1) * (1 - 0.5 * clamp(p.tipDown, 0, 1));
     g.save(); g.globalAlpha = 0.16 * k; g.fillStyle = INK;
     g.beginPath(); g.ellipse(0, 0, 24 * k, 4.5 * k, 0, 0, Math.PI * 2); g.fill(); g.restore();
   }
-  // the line he draws with his point
-  if (p.draw > 0) { g.save(); g.lineWidth = 4; g.beginPath(); g.moveTo(-p.x, 0); g.lineTo(-p.x + p.draw, 0); g.stroke(); g.restore(); }
+  // a line on the paper (what he draws), in stage coords
+  if (p.line) { g.save(); g.lineWidth = 4.5; g.beginPath(); g.moveTo(p.line[0] - p.x, 0); g.lineTo(p.line[1] - p.x, 0); g.stroke(); g.restore(); }
 
   // body space: origin in the middle of the body, rotated + squashed
   const lean = p.lean * D, sy = p.sy, sx = (1 / Math.sqrt(sy)) * p.turn;
-  const cy = -p.air - CENTER;
+  const restAir = Math.cos(lean) * CENTER * sy - CENTER; // air at which the (rotated) point touches the paper
+  const air = lerp(p.air, restAir, clamp(p.tipDown, 0, 1));
+  const cy = -air - CENTER;
   const toWorld = (bx, by) => { const X = bx * sx, Y = by * sy; return [Math.cos(lean) * X - Math.sin(lean) * Y, cy + Math.sin(lean) * X + Math.cos(lean) * Y]; };
   const W = R.bodyW, junction = CENTER - R.coneH; // body coords: +y = down, cone base at `junction`
   const bodyTop = junction - R.bodyH;
@@ -117,6 +125,7 @@ export function drawPuntje(g, p, x, y, s = 1, { flip = false, ground = true } = 
   const sL = toWorld(-W / 2, shY), sR = toWorld(W / 2, shY);
   arm(g, sL[0], sL[1], -1, p.aL - p.lean, p.eL, p.handL);
   const handR = arm(g, sR[0], sR[1], 1, p.aR + p.lean, p.eR, p.handR);
+  const forearmR = (-(p.aR + p.lean + p.eR)) * D; // direction of the right forearm
 
   // face
   g.save();
@@ -141,12 +150,15 @@ export function drawPuntje(g, p, x, y, s = 1, { flip = false, ground = true } = 
   else { g.beginPath(); g.moveTo(-7, my); g.quadraticCurveTo(0, my + p.smile * 9, 7, my); g.stroke(); }
   g.restore();
 
-  if (p.prop) { const pr = p.prop === "hand" ? { x: handR[0], y: handR[1], rot: 0.3 } : p.prop; potlood(g, pr.x, pr.y, pr.rot || 0); }
+  if (p.prop === "hand") {
+    // held in the fist, along the forearm, the point forward
+    potlood(g, handR[0], handR[1], forearmR + Math.PI / 2, 0.8);
+  } else if (p.prop) { g.save(); g.globalAlpha *= p.prop.a ?? 1; potlood(g, p.prop.x, p.prop.y, p.prop.rot || 0, p.prop.s || 1); g.restore(); }
   g.restore();
 }
 
-function potlood(g, x, y, rot) {
-  g.save(); g.translate(x, y); g.rotate(rot);
+function potlood(g, x, y, rot, sc = 1) {
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(sc, sc);
   g.lineWidth = 2.5; g.strokeStyle = INK; g.fillStyle = PAPER;
   g.beginPath(); g.rect(-4, -22, 8, 30); g.fill(); g.stroke();
   g.beginPath(); g.moveTo(-4, 8); g.lineTo(0, 16); g.lineTo(4, 8); g.closePath(); g.fill(); g.stroke();
@@ -163,6 +175,10 @@ function extra(g, kind, x, y, s, v) {
   if (kind === "zoef") { // speed lines (flying in, shooting up)
     g.globalAlpha = 0.8 * (1 - v);
     for (let i = -1; i <= 1; i++) { g.beginPath(); g.moveTo(x + i * 10 * s, y + 10 * s); g.lineTo(x + i * 10 * s, y + (34 + 10 * Math.abs(i)) * s); g.stroke(); }
+  }
+  if (kind === "balk") { // the bar he ducks under (shown softly)
+    g.globalAlpha = v; g.fillStyle = "#e4e4e4"; g.strokeStyle = SOFT;
+    g.fillRect(x - 70 * s, y - 9 * s, 140 * s, 18 * s); g.strokeRect(x - 70 * s, y - 9 * s, 140 * s, 18 * s);
   }
   if (kind === "zij") { // speed lines behind him when he flies in from the right
     g.globalAlpha = 0.8 * (1 - v);
@@ -185,9 +201,10 @@ A.zweven = { dur: 2.4, use: "1a, 1b: muur en iPad in rust, hij zweeft rond", f: 
   return { ...BASE, air: HOVER + 12 + Math.sin(u) * 14, x: Math.sin(u) * 22, lean: Math.cos(u) * 10, aL: -40 + flap * 22, aR: -40 + flap * 22, eL: 20, eR: 20, lookX: Math.cos(u) * 0.6, smile: 0.7, blink: blinkAt(t, 2.9) };
 } };
 
-A.wenken = { dur: 1.6, use: "1a, 1b, 3b, 6f: kom hier", f: (t) => {
-  const curl = Math.sin(((t / 0.8) % 1) * Math.PI * 2);
-  return { ...BASE, air: HOVER + bob(t, 3, 3), lean: -6, aR: 35, eR: 60 + curl * 55, aL: -75, lookX: 0.4, brow: 0.6, smile: 0.7, blink: blinkAt(t, 2.9) };
+A.wenken = { dur: 1.4, use: "1a, 1b, 3b, 6f: kom hier", f: (t) => {
+  // the arm rolls round and round towards himself ("kom maar")
+  const ph = (t / 0.7) * Math.PI * 2;
+  return { ...BASE, air: HOVER + bob(t, 3, 2.6), lean: -6 + Math.sin(ph) * 3, aR: 22 + Math.sin(ph) * 32, eR: 70 + Math.cos(ph) * 58, handR: 1, aL: -75, lookX: 0.3, brow: 0.6, smile: 0.8, blink: blinkAt(t, 2.9) };
 } };
 
 A.zwaaien = { dur: 1.2, use: "Hallo / tot ziens (8a, 9a)", f: (t) => {
@@ -195,11 +212,12 @@ A.zwaaien = { dur: 1.2, use: "Hallo / tot ziens (8a, 9a)", f: (t) => {
   return { ...BASE, air: HOVER + bob(t, 4, 2.6), aR: 60, eR: 25 + w * 35, handR: 1, aL: -75, lean: -4 + w * 3, smile: 0.9, mouth: 0.3, brow: 0.5, blink: blinkAt(t, 2.5) };
 } };
 
-A.wijzen = { dur: 2.2, use: "2c, 3b: kijk daar / naar de oogjes", f: (t) => {
-  const u = t / 2.2;
-  const p = keys([[0, {}], [0.12, { aR: 10, eR: 0, lean: 8, x: 8, lookX: 1, aL: -40, eL: -100, brow: 0.5 }], [0.7, {}], [0.85, { aR: -70, eR: -10, lean: 0, x: 0, lookX: 0, aL: -70, eL: -10, brow: 0 }]], u);
-  const tap = u > 0.15 && u < 0.7 ? Math.max(0, Math.sin(t * 9)) * 4 : 0;
-  return { ...p, air: HOVER + bob(t, 3), aR: p.aR + tap, blink: blinkAt(t, 3) };
+A.wijzen = { dur: 2.6, use: "2c, 3b: kijk daar (hij wijst met zijn punt)", f: (t) => {
+  const u = t / 2.6;
+  // he tips over until his point aims at the target (to the right), pokes three times, comes back
+  const p = keys([[0, {}], [0.12, { lean: 10, air: HOVER + 4 }], [0.28, { lean: -76, air: HOVER + 46, x: -12, aL: 30, eL: 30, aR: -20, eR: 10, lookY: 1, brow: 0.6, smile: 0.7 }], [0.34, { lean: -70 }], [0.74, {}], [0.88, { lean: 0, air: HOVER, x: 0, aL: -70, eL: -10, aR: -70, eR: -10, lookY: 0, brow: 0 }]], u);
+  const poke = u > 0.36 && u < 0.72 ? Math.max(0, Math.sin(((u - 0.36) / 0.36) * Math.PI * 6)) : 0;
+  return { ...p, x: p.x + poke * 9, lean: p.lean - poke * 3, blink: blinkAt(t, 3.2) };
 } };
 
 A.knikken = { dur: 1.6, use: "2b: kijkt mee terwijl je tekent", f: (t) => {
@@ -207,20 +225,27 @@ A.knikken = { dur: 1.6, use: "2b: kijkt mee terwijl je tekent", f: (t) => {
   return { ...BASE, air: HOVER + bob(t, 3) - n * 4, lean: n * 5, sy: 1 - n * 0.05, lookY: 0.6, lookX: Math.sin(t * 2) * 0.6, brow: 0.3, smile: 0.6, aL: -60, aR: -60, blink: blinkAt(t, 2.6) };
 } };
 
-A.tekenen = { dur: 2.6, use: "2a, 5b, 6c: tekent een lijn met zijn punt", f: (t) => {
-  const u = t / 2.6;
-  // floats down until his point touches the paper, draws, floats up again
-  const p = keys([[0, { air: HOVER, lean: 0, x: 0 }], [0.14, { air: 0, lean: -30, aL: 20, aR: -10, eL: -20, lookY: 0.9, lookX: -0.4, brow: -0.3, smile: 0, mouth: 0.2 }], [0.84, { air: 0, lean: -30, x: 100 }], [1, { air: HOVER, lean: 0, x: 0, aL: -70, aR: -70, smile: 0.5, mouth: 0, lookY: 0, lookX: 0, brow: 0 }]], u);
-  const draw = u > 0.14 && u < 0.97 ? clamp((u - 0.14) / 0.7, 0, 1) * 100 + 10 : 0;
-  return { ...p, draw, aL: p.aL + Math.sin(t * 18) * 2 };
+A.tekenen = { dur: 3.2, use: "2a, 5b, 6c: tekent een lijn met zijn punt", f: (t) => {
+  const u = t / 3.2;
+  // floats down until his point rests on the paper, pulls a line to the right (top leaning ahead), lifts off
+  const p = keys([[0, {}], [0.1, { lookY: 0.7, brow: 0.2 }], [0.26, { x: -40, lean: 24, tipDown: 1, aL: 30, eL: -40, aR: -25, eR: 35, lookY: 1, brow: -0.4, smile: 0, mouth: 0.2 }], [0.8, { x: 100 }], [0.92, { lean: 0, tipDown: 0, x: 100, aL: -70, eL: -10, aR: -70, eR: -10, lookY: 0, brow: 0.3, smile: 0.8, mouth: 0 }], [1, { x: 0 }]], u);
+  const wob = u > 0.26 && u < 0.8 ? Math.sin(t * 15) * 1.5 : 0;
+  const pose = { ...p, lean: p.lean + wob };
+  const start = -40 - Math.sin(24 * D) * CENTER, end = 100 - Math.sin(24 * D) * CENTER;
+  const line = u < 0.26 ? null : u < 0.8 ? [start, tipX(pose)] : [start, end];
+  return { ...pose, line, blink: u > 0.26 && u < 0.8 ? 0 : blinkAt(t, 3) };
 } };
 
-A.gooien = { dur: 2, use: "2a: geeft zijn potlood door", f: (t) => {
-  const u = t / 2;
-  const p = keys([[0, { aR: -60, eR: -20 }], [0.25, { aR: 120, eR: 40, lean: 10, sy: 1.05, lookX: 0.6, brow: 0.4 }], [0.42, { aR: 20, eR: 0, lean: -12, sy: 0.95, lookX: -0.4, mouth: 0.4 }], [0.6, { aR: -20, eR: -10, lean: -4, mouth: 0 }], [1, { aR: -70, eR: -10, lean: 0, lookX: 0, smile: 0.8 }]], u);
-  let prop = u < 0.42 ? "hand" : null;
-  if (!prop && u < 0.95) { const k = (u - 0.42) / 0.53; prop = { x: lerp(-40, -240, k), y: lerp(-130, 0, k) - Math.sin(k * Math.PI) * 120, rot: -k * 9 }; }
-  return { ...p, air: HOVER + bob(t, 3), prop, blink: blinkAt(t, 3) };
+A.gooien = { dur: 2.6, use: "2a: gooit het potloodje naar het kind", f: (t) => {
+  const u = t / 2.6;
+  // holds a little pencil, winds up, throws it towards you: it flies out of the screen
+  const p = keys([[0, { aR: -40, eR: 50, lookY: 0.2 }], [0.22, { aR: 115, eR: 55, lean: 8, air: HOVER + 6, brow: 0.5, smile: 0.4 }], [0.34, { aR: 5, eR: -15, lean: -12, air: HOVER - 4, mouth: 0.5 }], [0.5, { aR: -60, eR: -10, lean: -4, mouth: 0 }], [0.75, { aR: -70, eR: -10, lean: 0, smile: 0.9, brow: 0.3 }], [1, { aR: -40, eR: 50 }]], u);
+  let prop = u < 0.34 || u > 0.92 ? "hand" : null;
+  if (!prop && u < 0.78) {
+    const k = (u - 0.34) / 0.44, e = k * k; // speeds up as it comes towards you
+    prop = { x: lerp(34, 10, k), y: lerp(-150, -30, e), rot: 0.6 + k * 4.5, s: lerp(0.8, 6, e), a: 1 - clamp((k - 0.6) / 0.4, 0, 1) };
+  }
+  return { ...p, air: p.air + bob(t, 2), prop, blink: blinkAt(t, 3.4) };
 } };
 
 A["armen wijd"] = { dur: 2.4, use: "5b, 5c, 6b: doet voor (brug)", f: (t) => {
@@ -248,9 +273,13 @@ A.springen = { dur: 1.8, use: "5c, 6b: doet voor (springen)", f: (t) => {
   return { ...p, fx: u > 0.26 && u < 0.46 ? [["zoef", (u - 0.26) / 0.2, 0, -p.air]] : [] };
 } };
 
-A.bukken = { dur: 2.4, use: "5c, 6b: doet voor (bukken)", f: (t) => {
-  const p = keys([[0, {}], [0.22, { air: 2, sy: 0.74, aL: 70, aR: 70, eL: 80, eR: 80, lookY: -0.8, brow: 0.6, mouth: 0.3 }], [0.75, {}], [0.95, { air: HOVER, sy: 1, aL: -70, aR: -70, eL: -10, eR: -10, lookY: 0, brow: 0, mouth: 0 }]], t / 2.4);
-  return { ...p, blink: blinkAt(t, 3.1) };
+A.bukken = { dur: 2.6, use: "5c, 6b: doet voor (bukken)", f: (t) => {
+  const u = t / 2.6;
+  // ducks down under a bar, arms over his head, eyes shut; then pops back up
+  const p = keys([[0, {}], [0.14, { air: HOVER + 3, aL: -20, aR: -20 }], [0.3, { air: 3, sy: 0.94, aL: 72, eL: 100, aR: 72, eR: 100, blink: 1, browTilt: 0.9, brow: 0.2, smile: -0.2 }], [0.76, {}], [0.88, { air: HOVER + 8, sy: 1, aL: -70, eL: -10, aR: -70, eR: -10, blink: 0, browTilt: 0, brow: 0.5, smile: 0.8 }], [1, { air: HOVER }]], u);
+  const shake = u > 0.32 && u < 0.76 ? Math.sin(t * 30) * 0.8 : 0;
+  const bar = clamp(Math.min((u - 0.27) / 0.06, (0.8 - u) / 0.06), 0, 1); // only while he is down
+  return { ...p, x: shake, fx: bar > 0 ? [["balk", bar, 0, -142]] : [] };
 } };
 
 A.juichen = { dur: 1, use: "2d, 4a, 6d, 7b: gelukt!", f: (t) => {
@@ -276,8 +305,10 @@ A.tikken = { dur: 1.4, use: "2x: tikt tegen het glas (te lang niets)", f: (t) =>
   return { ...BASE, air: HOVER + bob(t, 3), lean: 6 - k * 4, aR: 10 + k * 12, eR: 40 - k * 40, aL: -70, eyes: 1.25, brow: 0.9, mouth: 0.35, lookX: 0.2, fx: k > 0.9 ? [["klop", (u % 0.5) * 2, 74, -150]] : [] };
 } };
 
-A.buigen = { dur: 3, use: "8c: eindscherm", f: (t) => {
-  const p = keys([[0, {}], [0.25, { smile: 0.9 }], [0.45, { air: 12, sy: 0.78, aR: -120, eR: -60, aL: -30, eL: 30, happy: 1, brow: 0.3, lookY: 1 }], [0.75, {}], [0.9, { air: HOVER, sy: 1, aR: -70, eR: -10, aL: -70, eL: -10, happy: 0, lookY: 0 }]], t / 3);
+A.buigen = { dur: 3.2, use: "8c: eindscherm", f: (t) => {
+  const u = t / 3.2;
+  // a theatrical bow: tips over in one piece, one arm across his belly, the other swept out
+  const p = keys([[0, { smile: 0.8 }], [0.16, { lean: -6, air: HOVER + 4 }], [0.36, { lean: 40, air: HOVER - 4, aR: -150, eR: -30, aL: 25, eL: 25, handL: 1, happy: 1, brow: 0.4 }], [0.7, {}], [0.86, { lean: 0, air: HOVER, aR: -70, eR: -10, aL: -70, eL: -10, handL: 0, happy: 0, brow: 0.2 }], [1, {}]], u);
   return { ...p, air: p.air + bob(t, 2), blink: blinkAt(t, 3.5) };
 } };
 
