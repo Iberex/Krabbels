@@ -13,7 +13,7 @@ export const C = {
   room: "#e9e6df", floor: "#d6d1c7", paper: "#fffdf7", ink: "#3a3a3a",
   grass: "#bfe3ae", grassLine: "#74b85e", sky: "#d9ecff",
   block: "#f6b06e", blockLine: "#c9803f", door: "#b47b4f",
-  kid: "#3b7bff", kidSoft: "#3b7bff", led: "#ffcf3a", ledOff: "#bdb6a8",
+  kid: "#3b7bff", kidSoft: "#3b7bff", led: "#ffb800", ledOff: "#bdb6a8",
   puntje: { body: "#ffd84d", cap: "#ff9db0", cone: "#f2c98b" },
   drawing: ["#e8553d", "#8a5cf6"], others: ["#2e9e5b", "#e08a1e", "#d64f8c", "#3b7bff", "#7a7a7a", "#1f9bb5"],
 };
@@ -206,8 +206,14 @@ function oversteken(g, E, kind, info, u, t) {
     krabbel(g, kr, x, y, 110, st, t + i, { lift });
   });
 }
-function wachten(g, E, info, st, t) {
-  (E.duo ? [MINE[0], MINE[1]] : [MINE[0]]).forEach((kr, i) => krabbel(g, kr, info.stop - (i ? 110 : 0), G + 4, 110, st, t + i));
+function wachten(g, E, info, st, t, kind = null) {
+  let mood = null, look = null;
+  if (st === "omkijken" && kind) {
+    const atGap = Math.floor(t * 0.9) % 2 === 0;
+    if (OBS[kind].gap) { mood = atGap ? "bang" : "blij"; look = atGap ? [0.7, 0.9] : [-0.2, 0.3]; } // looks down into the gap, then at you
+    else { mood = atGap ? "verrast" : "blij"; look = atGap ? [0.9, kind === "bukken" ? -0.8 : 0.2] : [-0.2, 0.3]; }
+  }
+  (E.duo ? [MINE[0], MINE[1]] : [MINE[0]]).forEach((kr, i) => krabbel(g, kr, info.stop - (i ? 110 : 0), G + 4, 110, st, t + i, { mood, look }));
 }
 // Puntje draws a bridge: his point on the bridge tip
 function tekentBrug(g, kind, built, t) {
@@ -234,7 +240,7 @@ function beat(E, kind, t, { mode = "spel", dur = 6, owner = null, helpAt = null 
     else silhouet(g, E, "staan", null);
     const info = obstakel(g, kind, built, slide, E.now);
     if (crossing > 0) oversteken(g, E, kind, info, crossing, t);
-    else wachten(g, E, info, T.wait && t > T.wait[0] ? "wiebelen" : t < 1.0 ? "lopen" : "omkijken", t);
+    else wachten(g, E, info, T.wait && t > T.wait[0] ? "wiebelen" : t < 1.0 ? "lopen" : "omkijken", t, kind);
     // the sign (game) or Puntje in front (tutorial / help)
     if (mode === "spel") {
       const bx = kind === "bukken" ? OX + 300 : OX, by = kind === "bukken" ? 380 : holds ? 330 : 360;
@@ -337,7 +343,8 @@ export const SCENES = [
         if (t > 1.2 && t < 3) { const k = ease(seg(t, 1.2, 3)); y = lerp(G + 4, 1040, k); sc = lerp(1, 2.4, k); st = "lopen"; }
         else if (t >= 3 && t < 5.6) { y = 1040; sc = 2.4; st = "zitten"; x = bx + Math.sin((t - 3) * 40) * 6 * Math.max(0, 1 - (t - 3) * 2); }
         else if (t >= 5.6) { const k = ease(seg(t, 5.6, 7.6)); y = lerp(1040, G + 4, k); sc = lerp(2.4, 1, k); x = lerp(bx, bx + 240, k); st = k < 1 ? "lopen" : "staan"; }
-        krabbel(g, MINE[i], x, y, 110, st, t, { scale: sc, flip: t >= 5.6 && t < 7.6 });
+        const mood = t < 3 ? "blij" : t < 4 ? "verrast" : t < 5.6 ? "oei" : "neutraal";
+        krabbel(g, MINE[i], x, y, 110, st, t, { scale: sc, flip: t >= 5.6 && t < 7.6, mood, look: t < 3 ? [-0.1, 0.5] : t < 5.6 ? [0.3, -0.6] : null });
         if (t > 4 && t < 5.8) vraagteken(g, x + 30, y - 110 * sc * 1.5, seg(t, 4, 4.4));
       });
       barst(g, 900, 760, t > 3 ? 1 - seg(t, 4.2, 6) : 0);
@@ -349,7 +356,7 @@ export const SCENES = [
     E.kids(null, [true, E.duo]);
     E.wall((g) => {
       papier(g); grond(g);
-      (E.duo ? [0, 1] : [0]).forEach((i) => krabbel(g, MINE[i], 1140 - i * 130, G + 4, 110, t > 8.5 && t < 10 ? "juichen" : t > 3.6 ? "omkijken" : "staan", t + i));
+      (E.duo ? [0, 1] : [0]).forEach((i) => krabbel(g, MINE[i], 1140 - i * 130, G + 4, 110, t > 8.5 && t < 10 ? "juichen" : t > 3.6 ? "omkijken" : "staan", t + i, { mood: t > 8.5 && t < 10 ? null : t > 3.6 ? "nieuwsgierig" : "oei", look: t > 3.6 ? [0.2, -0.9] : [0.9, -0.3] }));
       const px = 1400, py = G;
       if (t < 2.6) puntjePose(g, { aR: 40, eR: 125, lookY: -0.6, lookX: 0.4, brow: 0.3, browTilt: 0.7, smile: 0, air: HOVER + Math.sin(t * 2) * 4, lean: Math.sin(t * 1.5) * 4 }, px, py, 1.15);
       else puntjeAnim(g, t < 3.6 ? "juichen" : "wijzen", t - 2.6, px, py, 1.15, { flip: true });
@@ -384,7 +391,7 @@ export const SCENES = [
         if (u > 0 && u < 1) pen = [x + Math.sin(u * Math.PI * 7) * 120, Math.min(G, revealY + 40)];
       });
       grond(g);
-      (E.duo ? [0, 1] : [0]).forEach((i) => krabbel(g, MINE[i], 520 - i * 120, G + 4, 110, moving ? "juichen" : "omkijken", t + i));
+      (E.duo ? [0, 1] : [0]).forEach((i) => krabbel(g, MINE[i], 520 - i * 120, G + 4, 110, moving ? "juichen" : "omkijken", t + i, { mood: moving ? null : "verrast", look: moving ? null : [0.9, -0.5] }));
       if (t < 1) { const k = easeOut(t); puntjeAnim(g, "springen", t, lerp(1400, xs[0] + 120, k), lerp(G, 300, k), 1); }
       else if (pen) puntjePose(g, { lean: 24, tipDown: 1, aL: 30, eL: -40, aR: -25, eR: 35, lookY: 1 }, pen[0] + 30, pen[1], 1);
       else puntjeAnim(g, moving ? "juichen" : "rust", t, 1500, G, 1);
@@ -400,7 +407,7 @@ export const SCENES = [
     E.kids(null, [true, E.duo]);
     E.wall((g) => {
       papier(g); silhouet(g, E, "staan", null); obstakel(g, "helling", 0, 0, E.now);
-      wachten(g, E, { stop: OBS.helling.gap[0] - 80 }, "staan", t);
+      wachten(g, E, { stop: OBS.helling.gap[0] - 80 }, "omkijken", t, "helling");
       const k = easeOut(seg(t, 0, 0.6));
       puntjePose(g, { aR: 75, eR: 20, handR: 1, smile: 0.8, brow: 0.6, air: HOVER + Math.sin(t * 3) * 4 }, lerp(1500, 1460, k), lerp(820, 1060, k), lerp(1, 1.9, k));
       const n = t < 1.2 ? null : t < 2.2 ? "3" : t < 3.2 ? "2" : t < 4.2 ? "1" : "!";
@@ -545,7 +552,7 @@ function klaarScherm(g, t, i) {
   const out = seg(t, 6.8, 7.6);
   const st = t < 4 ? "wiebelen" : t < 4.6 ? "springen" : t < 6 ? "zwaaien" : "staan";
   const lift = t >= 4 && t < 4.6 ? Math.sin(seg(t, 4, 4.6) * Math.PI) * 160 : out * 900;
-  krabbel(g, kr, cx, 820, 420, st, t, { lift });
+  krabbel(g, kr, cx, 820, 420, st, t, { lift, mood: t < 4 ? "slaperig" : t < 4.6 ? "verrast" : null, look: t >= 4.6 && t < 6 ? [-0.2, 0.4] : null });
   if (t < 6) puntjeAnim(g, "juichen", t, 1150, 860, 1.3);
   else { const k = seg(t, 6, 6.8); puntjePose(g, { aL: lerp(-70, 10, k), eL: 0, happy: 1, smile: 1, air: HOVER + out * 900 }, lerp(1150, cx + 330, k), 860, 1.3); }
   if (t > 4.6 && t < 6) sterretjes(g, cx, 300, seg(t, 4.6, 5.8));

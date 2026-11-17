@@ -3,7 +3,7 @@
 // en speelt de scènes uit verhaal-scenes.js af als een film.
 // Spatie = afspelen/pauze · ← → = vorige/volgende scène · 1–8 = hoofdstuk · D = solo/duo · H = bediening verbergen
 // =====================================================================
-import { SCENES, WALL, IPADS, MON, STRIPS, KID_X, C, reiziger } from "./verhaal-scenes.js?v=20261117g";
+import { SCENES, WALL, IPADS, MON, STRIPS, KID_X, C } from "./verhaal-scenes.js?v=20261117g";
 import { gebaar } from "./rig.js?v=20261117g";
 import { rr, text, clamp } from "./kit.js?v=20261117g";
 
@@ -40,13 +40,20 @@ function along(pts, p) {
   for (let i = 0; i < L.length; i++) { if (d <= L[i]) { const u = d / L[i]; return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * u, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * u]; } d -= L[i]; }
   return pts[pts.length - 1];
 }
+// a led strip: little lights; a moving light runs along it (lit = where, 0..1)
 function strip(g, pts, lit = null) {
-  const n = 30;
+  const n = 34;
   for (let k = 0; k <= n; k++) {
-    const q = along(pts, k / n), on = lit !== null && Math.abs(k / n - lit) < 0.12;
-    g.fillStyle = on ? C.led : C.ledOff;
-    g.beginPath(); g.arc(q[0], q[1], on ? 5 : 3, 0, Math.PI * 2); g.fill();
-    if (on) { g.save(); g.globalAlpha = 0.25; g.beginPath(); g.arc(q[0], q[1], 14, 0, Math.PI * 2); g.fill(); g.restore(); }
+    const q = along(pts, k / n), d = lit === null ? 1 : Math.abs(k / n - lit), on = Math.max(0, 1 - d / 0.14);
+    g.fillStyle = C.ledOff;
+    g.beginPath(); g.arc(q[0], q[1], 3, 0, Math.PI * 2); g.fill();
+    if (on > 0) {
+      g.save(); g.fillStyle = C.led;
+      g.globalAlpha = 0.3 * on; g.beginPath(); g.arc(q[0], q[1], 10 + 18 * on, 0, Math.PI * 2); g.fill();
+      g.globalAlpha = 0.6 + 0.4 * on; g.beginPath(); g.arc(q[0], q[1], 3.5 + 4.5 * on, 0, Math.PI * 2); g.fill();
+      if (on > 0.8) { g.globalAlpha = 1; g.fillStyle = "#fff"; g.beginPath(); g.arc(q[0], q[1], 3, 0, Math.PI * 2); g.fill(); }
+      g.restore();
+    }
   }
 }
 
@@ -116,8 +123,6 @@ function frame(now) {
   });
   // iPads
   IPADS.forEach((d, i) => device(g, d, calls.ipad[i], "ipad"));
-  // travellers on the strips
-  for (const q of calls.pulses) if (q.p > 0 && q.p < 1) { const pt = along(STRIPS[q.name], q.p); reiziger(g, q.carry, pt[0], pt[1], now / 1000, q.i); }
   // labels
   label(g, "Muur · beamer", WALL.x + WALL.w / 2, WALL.y + WALL.h + 22);
   label(g, "iPad 1", IPADS[0].x + IPADS[0].w / 2, IPADS[0].y - 28);
