@@ -19,15 +19,25 @@ export const C = {
 };
 
 // --- the room: where every device is (room = 1920 × 1080) ----------------------------------------
-export const WALL = { x: 300, y: 40, w: 1320, h: 742, vw: 1920, vh: 1080 };
-export const IPADS = [{ x: 580, y: 818, w: 240, h: 180, vw: 1366, vh: 1024 }, { x: 1100, y: 818, w: 240, h: 180, vw: 1366, vh: 1024 }];
-export const MON = { x: 1662, y: 520, w: 236, h: 133, vw: 1920, vh: 1080 };
+// From left to right, like the story: draw at the iPads (entrance) → play in front of the wall → exit at the monitor.
+export const FLOOR_Y = 720; // where the room's wall meets the floor
+export const WALL = { x: 520, y: 46, w: 1100, h: 619, vw: 1920, vh: 1080 };
+export const IPADS = [{ x: 118, y: 790, w: 190, h: 143, vw: 1366, vh: 1024 }, { x: 398, y: 790, w: 190, h: 143, vw: 1366, vh: 1024 }];
+export const MON = { x: 1662, y: 470, w: 236, h: 133, vw: 1920, vh: 1080 };
 export const STRIPS = {
-  ipad0: [[700, 1060], [860, 790]], // from the iPad (0) to the wall (1)
-  ipad1: [[1220, 1060], [1060, 790]],
-  mon: [[1622, 760], [1702, 900], [1780, 1060]], // from the wall (0) to the monitor (1)
+  ipad0: [[213, 1062], [560, 1018], [790, 668]], // over the floor, from the iPad (0) to the wall (1)
+  ipad1: [[493, 1062], [700, 1000], [890, 668]],
+  mon: [[1620, 640], [1700, 880], [1780, 1062]], // from the wall (0) to the monitor (1)
 };
-export const KID_X = [700, 1220];
+// Where a child stands. w: -1 = still outside (left), 0 = at the iPad, 1 = on the footprints, 2 = at the exit.
+export const VOET = (duo) => (duo ? [900, 1240] : [1070]);
+export function kidSpot(i, w, duo) {
+  const outX = -120, ipadX = [62, 342][i], voetX = VOET(duo)[Math.min(i, duo ? 1 : 0)], exitX = 1700 + i * 60;
+  const ipadY = 1062, voetY = 1040;
+  if (w <= 0) return [lerp(outX, ipadX, ease(w + 1)), ipadY];
+  if (w <= 1) { const k = ease(w); return [lerp(ipadX, voetX, k), lerp(ipadY, voetY, k)]; }
+  const k = ease(w - 1); return [lerp(voetX, exitX, k), lerp(voetY, 1062, k)];
+}
 
 const seg = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
 const G = 820; // ground on the wall (wall coords)
@@ -307,7 +317,7 @@ export const SCENES = [
 
   { ch: 2, title: "Kinderen nemen plaats", sub: "De camera ziet het kind. Puntje vliegt van de muur via de ledstrip naar de iPad en vraagt om te tikken.", dur: 10, draw(E, t) {
     const k0 = seg(t, 0, 1.4), k1 = E.duo ? seg(t, 3, 4.4) : 0;
-    E.kids(null, [k0 > 0, k1 > 0], [k0, k1]);
+    E.kids(null, [true, E.duo], [1, 1], [k0 - 1, k1 - 1]); // they walk in, to the iPads
     E.wall((g) => {
       papier(g); grond(g); rondlopers(g, t, 4); logo(g, 60, 70, 0.8);
       if (t > 1.4 && t < 2.6) { const a = 0.5 + 0.5 * Math.sin(t * 20); g.save(); g.globalAlpha = a; rr(g, 900, 30, 120, 70, 16); g.fillStyle = C.ink; g.fill(); dot(g, 960, 65, 22, "#9ad"); g.restore(); }
@@ -334,7 +344,7 @@ export const SCENES = [
   } },
 
   { ch: 3, title: "Tekenen", sub: "Puntje doet het voor: een stippelcirkel, ogen en benen als stickers, en weer weg. Dan tekent het kind met Puntje, en plakt zelf de stickers.", dur: 17, draw(E, t) {
-    E.kids(null, [true, E.duo]);
+    E.kids(null, [true, E.duo], [1, 1], [0, 0]);
     for (const i of E.duo ? [0, 1] : [0]) E.ipad(i, (g) => tekenScherm(g, t - i * 0.7, i));
     if (!E.duo && t < 15.2) E.ipad(1, (g) => tikScherm(g, t + 0.4)); // after "klaar" nobody can join any more
     E.wall((g) => { papier(g); grond(g); rondlopers(g, t, 4, 0.6); });
@@ -342,7 +352,7 @@ export const SCENES = [
   } },
 
   { ch: 4, title: "Klaar", sub: "Puntje tovert de tekening tot leven. De Krabbel knippert, beweegt, wordt wakker en zwaait. Samen springen ze via de ledstrip naar de muur.", dur: 12, draw(E, t) {
-    E.kids(null, [true, E.duo]);
+    E.kids(null, [true, E.duo], [1, 1], [seg(t, 9.4, 11.4), seg(t, 10, 11.9)]); // after drawing: step onto the footprints
     const offs = E.duo ? [0, 1.6] : [0];
     offs.forEach((o, i) => {
       const lt = t - o;
@@ -481,7 +491,8 @@ export const SCENES = [
   } },
   { ch: 7, title: "Einde: naar de monitor", sub: "Via de ledstrip komt de Krabbel op de monitor terecht, zwaait en gaat tussen de andere Krabbels wonen. Daarna start alles opnieuw.", dur: 9, draw(E, t) {
     const reset = seg(t, 6, 7);
-    E.kids(null, [t < 7, E.duo && t < 7], [1 - reset, 1 - reset]);
+    const gone = 1 - seg(t, 5.4, 6.2);
+    E.kids(null, [true, E.duo], [gone, gone], [1 + seg(t, 1.6, 5.6), 1 + seg(t, 1.8, 5.8)]); // they follow their Krabbel to the exit
     E.pulse("mon", seg(t, 0, 1.6), "krabbel");
     E.wall((g) => {
       papier(g); grond(g);
@@ -494,7 +505,7 @@ export const SCENES = [
   } },
 
   { ch: 8, title: "Uitzondering: iPad inactief", sub: "Na 10 s niets wordt het scherm donkerder en kijkt Puntje vragend. Na nog eens 10 s gaat die iPad uit.", dur: 12, extra: true, draw(E, t) {
-    E.kids(null, [t < 2, false], [1 - seg(t, 1, 2), 0]);
+    E.kids(null, [true, false], [1 - seg(t, 1, 2), 0], [0, 0]);
     E.ipad(0, (g) => {
       if (t > 10.6) return; // off
       canvasScherm(g, { t });

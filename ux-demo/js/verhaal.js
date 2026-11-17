@@ -3,9 +3,9 @@
 // en speelt de scènes uit verhaal-scenes.js af als een film.
 // Spatie = afspelen/pauze · ← → = vorige/volgende scène · 1–8 = hoofdstuk · D = solo/duo · H = bediening verbergen
 // =====================================================================
-import { SCENES, WALL, IPADS, MON, STRIPS, KID_X, C } from "./verhaal-scenes.js?v=20261117g";
+import { SCENES, WALL, IPADS, MON, STRIPS, FLOOR_Y, VOET, kidSpot, C } from "./verhaal-scenes.js?v=20261117g";
 import { gebaar } from "./rig.js?v=20261117g";
-import { rr, text, clamp } from "./kit.js?v=20261117g";
+import { rr, text, clamp, voetjes } from "./kit.js?v=20261117g";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("film"), ctx = canvas.getContext("2d");
@@ -92,7 +92,7 @@ function collect(scene, t, now) {
     duo: P.duo, now: now / 1000,
     wall: (fn) => (calls.wall = fn), mon: (fn) => (calls.mon = fn),
     ipad: (i, fn) => (calls.ipad[i] = fn),
-    kids: (gest, present = [true, P.duo], alpha = [1, 1]) => (calls.kids = { gest, present, alpha }),
+    kids: (gest, present = [true, P.duo], alpha = [1, 1], walk = [1, 1]) => (calls.kids = { gest, present, alpha, walk }),
     pulse: (name, p, carry, i = 0) => calls.pulses.push({ name, p, carry, i }),
   };
   try { scene.draw(E, t); } catch (e) { console.error(e); }
@@ -117,25 +117,39 @@ function frame(now) {
   VIEW = { sc, ox, oy };
   g.translate(ox, oy); g.scale(sc, sc);
   // room
-  g.fillStyle = C.room; g.fillRect(-2000, -2000, 6000, 2830);
-  g.fillStyle = C.floor; g.fillRect(-2000, 830, 6000, 3000);
-  g.fillStyle = "rgba(0,0,0,0.06)"; g.fillRect(-2000, 826, 6000, 6);
+  g.fillStyle = C.room; g.fillRect(-2000, -2000, 6000, 2000 + FLOOR_Y);
+  g.fillStyle = C.floor; g.fillRect(-2000, FLOOR_Y, 6000, 3000);
+  g.fillStyle = "rgba(0,0,0,0.06)"; g.fillRect(-2000, FLOOR_Y - 4, 6000, 6);
+  // footprints on the floor in front of the wall: where the children play
+  const K = calls.kids;
+  VOET(P.duo).forEach((x, i) => {
+    const w = K && K.present[i] ? K.walk[i] : null, on = w !== null && Math.abs(w - 1) < 0.02;
+    const invite = w !== null && w > 0 && w < 1;
+    g.save(); g.translate(x, 1044); g.scale(1, 0.42);
+    g.globalAlpha = on || invite ? 1 : 0.55;
+    voetjes(g, 0, 0, on, now / 1000 * (invite ? 2 : 1), 1.15);
+    g.restore();
+  });
   // strips (base)
   for (const k in STRIPS) { const pl = calls.pulses.find((q) => q.name === k && q.p > 0 && q.p < 1); strip(g, STRIPS[k], pl ? pl.p : null); }
   // wall + monitor
   device(g, WALL, calls.wall, "wall", prev && prev.wall, fadeA);
   device(g, MON, calls.mon, "mon", prev && prev.mon, fadeA);
-  // the children (seen from behind), standing at their iPad
-  if (calls.kids) KID_X.forEach((x, i) => {
-    if (!calls.kids.present[i]) return;
-    const gs = calls.kids.gest, mine = gs && (gs.who === null || gs.who === undefined || gs.who === i);
+  // iPads (at the entrance, left)
+  IPADS.forEach((d, i) => device(g, d, calls.ipad[i], "ipad", prev && prev.ipad[i], fadeA));
+  // the children (seen from behind): at their iPad, on the footprints, or walking in between
+  if (K) [0, 1].forEach((i) => {
+    if (!K.present[i]) return;
+    const w = K.walk[i], [x, fy] = kidSpot(i, w, P.duo);
+    const walking = w > -1 && Math.abs(w - Math.round(w)) > 0.01;
+    const gs = K.gest, mine = gs && Math.abs(w - 1) < 0.02 && (gs.who === null || gs.who === undefined || gs.who === i);
     const name = mine ? (gs.g === "hand in hand" ? "verbinden" : gs.g) : "staan";
-    g.save(); g.globalAlpha = clamp(calls.kids.alpha[i] ?? 1, 0, 1);
-    gebaar(g, name, x - 150, 905, 360, C.kid, mine ? gs.t : null, mine ? gs.angle || 0 : 0);
+    const S = 330, bobY = walking ? Math.abs(Math.sin(now / 1000 * 9 + i)) * 10 : 0;
+    g.save(); g.globalAlpha = clamp(K.alpha[i] ?? 1, 0, 1);
+    g.fillStyle = "rgba(0,0,0,0.12)"; g.beginPath(); g.ellipse(x, fy, 70, 12, 0, 0, Math.PI * 2); g.fill();
+    gebaar(g, name, x, fy - 0.42 * S - bobY, S, C.kid, mine ? gs.t : null, mine ? gs.angle || 0 : 0);
     g.restore();
   });
-  // iPads
-  IPADS.forEach((d, i) => device(g, d, calls.ipad[i], "ipad", prev && prev.ipad[i], fadeA));
   // labels
   label(g, "Muur · beamer", WALL.x + WALL.w / 2, WALL.y + WALL.h + 22);
   label(g, "iPad 1", IPADS[0].x + IPADS[0].w / 2, IPADS[0].y - 28);
