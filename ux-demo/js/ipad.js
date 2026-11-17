@@ -1,10 +1,10 @@
 // =====================================================================
 // De iPad, 1366 × 1024 (liggend). Tekenen met de vinger, oogjes plakken, klaar.
 // =====================================================================
-import { K, rr, line, dot, clamp, lerp, ease, easeOut, easeBack, ipadKnop, kleurbol, oogjes, OOGTYPES, tikHier } from "./kit.js?v=20261117c";
-import { puntje, seq } from "./sprites.js?v=20261117c";
-import { pok } from "./krabbel.js?v=20261117c";
-import { S, go, share } from "./flow.js?v=20261117c";
+import { K, rr, line, dot, clamp, lerp, ease, easeOut, easeBack, ipadKnop, kleurbol, oogjes, OOGTYPES, tikHier } from "./kit.js?v=20261117g";
+import { puntje, seq } from "./sprites.js?v=20261117g";
+import { pok } from "./krabbel.js?v=20261117g";
+import { S, go, share } from "./flow.js?v=20261117g";
 
 export const W = 1366, H = 1024;
 const BLAD = { x: 133, y: 50, w: 1100, h: 740 };

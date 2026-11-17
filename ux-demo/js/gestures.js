@@ -3,7 +3,7 @@
 // Toetsen (ingedrukt houden): B armen wijd · L armen omhoog · K bukken · N hand in hand
 // Kort: J springen · P iemand in beeld aan/uit
 // =====================================================================
-import { Tracker, initCamera, initPose, handInHand } from "./pose.js?v=20261117c";
+import { Tracker, initCamera, initPose, handInHand } from "./pose.js?v=20261117g";
 
 export const tracker = new Tracker();
 const sim = { arms: false, ladder: false, duck: false, hand: false, jumpAt: -1e9, present: false };

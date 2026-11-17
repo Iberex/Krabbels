@@ -4,7 +4,7 @@
 // =====================================================================
 
 const img = new Image();
-img.src = "assets/personages.png?v=20261117c";
+img.src = "assets/personages.png?v=20261117g";
 export const ready = new Promise((res) => (img.onload = res));
 
 // [x, y, w, h] in Figma-px (1x). De afbeelding is 2x.

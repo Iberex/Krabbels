@@ -2,7 +2,7 @@
 // Krabbel = de tekening van het kind + geplakte oogjes + stokjes.
 // Zonder tekening gebruiken we een voorbeeldtekening (een krabbel van "een ander kind").
 // =====================================================================
-import { K, oogjes, clamp, easeOut } from "./kit.js?v=20261117c";
+import { K, oogjes, clamp, easeOut } from "./kit.js?v=20261117g";
 
 function rng(seed) {
   let s = seed >>> 0 || 1;

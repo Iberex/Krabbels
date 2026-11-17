@@ -1,11 +1,11 @@
 // =====================================================================
 // De muur (beamer), 1920 × 1080. Eén functie per toestand van de flowkaart.
 // =====================================================================
-import { K, rr, text, line, dot, clamp, lerp, ease, easeOut, easeBack, voortgang, tijd, voetjes, armlijn, verbindpunt, doellijn, sterretjes, pijl, kaart } from "./kit.js?v=20261117c";
-import { bordje, gebaar } from "./rig.js?v=20261117c";
-import { sprite, puntje, seq } from "./sprites.js?v=20261117c";
-import { krabbel, pok } from "./krabbel.js?v=20261117c";
-import { S, COURSE, FINALE, TUT, tutSince, obstacle, holds } from "./flow.js?v=20261117c";
+import { K, rr, text, line, dot, clamp, lerp, ease, easeOut, easeBack, voortgang, tijd, voetjes, armlijn, verbindpunt, doellijn, sterretjes, pijl, kaart } from "./kit.js?v=20261117g";
+import { bordje, gebaar } from "./rig.js?v=20261117g";
+import { sprite, puntje, seq } from "./sprites.js?v=20261117g";
+import { krabbel, pok } from "./krabbel.js?v=20261117g";
+import { S, COURSE, FINALE, TUT, tutSince, obstacle, holds } from "./flow.js?v=20261117g";
 
 export const W = 1920, H = 1080;
 const GROUND = 800, KANT = 260, OX = 1090;

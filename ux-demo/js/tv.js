@@ -1,9 +1,9 @@
 // =====================================================================
 // De tv aan de uitgang: de Krabbelwereld, 1920 × 1080.
 // =====================================================================
-import { K, lerp, clamp, ease } from "./kit.js?v=20261117c";
-import { krabbel } from "./krabbel.js?v=20261117c";
-import { S } from "./flow.js?v=20261117c";
+import { K, lerp, clamp, ease } from "./kit.js?v=20261117g";
+import { krabbel } from "./krabbel.js?v=20261117g";
+import { S } from "./flow.js?v=20261117g";
 
 export const W = 1920, H = 1080;
 const GROUND = 860;

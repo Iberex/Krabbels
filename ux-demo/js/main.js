@@ -8,14 +8,14 @@
 // Regie: → volgende · ← terug · 1–9 fase · E uitzondering · D duo · R opnieuw · H regie verbergen · F volledig scherm
 // Gebaren zonder camera (ingedrukt houden): B armen wijd · L armen omhoog · K bukken · N hand in hand · J springen · P iemand in beeld
 // =====================================================================
-import { K, rr, text, clamp } from "./kit.js?v=20261117c";
-import { S, STATES, FASES, EDGES, COURSE, FINALE, TUT, TUT_TIME, since, tutSince, tutNext, cur, go, next, back, share, onChange, obstacle, holds } from "./flow.js?v=20261117c";
-import * as G from "./gestures.js?v=20261117c";
-import { ready as spritesReady } from "./sprites.js?v=20261117c";
-import { voorbeeld, vanTekening } from "./krabbel.js?v=20261117c";
-import { drawMuur, W as MW, H as MH } from "./muur.js?v=20261117c";
-import { drawIpad, ipadPointer, resetDrawing, sampleDrawing, exportKrabbel, W as IW, H as IH } from "./ipad.js?v=20261117c";
-import { drawTv } from "./tv.js?v=20261117c";
+import { K, rr, text, clamp } from "./kit.js?v=20261117g";
+import { S, STATES, FASES, EDGES, COURSE, FINALE, TUT, TUT_TIME, since, tutSince, tutNext, cur, go, next, back, share, onChange, obstacle, holds } from "./flow.js?v=20261117g";
+import * as G from "./gestures.js?v=20261117g";
+import { ready as spritesReady } from "./sprites.js?v=20261117g";
+import { voorbeeld, vanTekening } from "./krabbel.js?v=20261117g";
+import { drawMuur, W as MW, H as MH } from "./muur.js?v=20261117g";
+import { drawIpad, ipadPointer, resetDrawing, sampleDrawing, exportKrabbel, W as IW, H as IH } from "./ipad.js?v=20261117g";
+import { drawTv } from "./tv.js?v=20261117g";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("scherm"), ctx = canvas.getContext("2d"), video = $("webcam");
