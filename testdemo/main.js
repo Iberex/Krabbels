@@ -10,8 +10,8 @@
 // Keyboard (for testing without camera), player 1 / player 2:
 //   connect B / N   ladder L / O   jump J / U   duck (hold) K / I
 // =====================================================================
-import { POSE, Tracker, initCamera, initPose, handInHand } from "./pose.js?v=20261113d";
-import { SvgCtx } from "./svgctx.js?v=20261113d";
+import { POSE, Tracker, initCamera, initPose, handInHand } from "./pose.js?v=20261116a";
+import { SvgCtx } from "./svgctx.js?v=20261116a";
 
 // ---------------------------------------------------------------------
 // Settings
@@ -22,7 +22,11 @@ const CFG = {
   figure: 0.5, // H. Height of a player silhouette.
   krabbel: 0.075, // H. Krabbel height.
   angleTol: 16, // degrees. How close your arm line must be to the line between the points.
-  posTol: { solo: 0.09, duo: 0.14 }, // W. How far from the obstacle you may stand.
+  posTol: { solo: 0.09, duo: 0.14 }, // W. How far from the obstacle you may stand (only when "zelf zoeken").
+  // Fixed spots (footprints on the floor, W): you stay there, the next obstacle comes to you.
+  spots: { solo: [0.5], duo: [0.35, 0.65] },
+  spotTol: 0.1, // W. Further from your footprints than this: an arrow points you back.
+  camFollow: 3.5, // How fast the world slides to put the next obstacle in front of you (fixed spots).
   togetherWidth: 2.2, // Obstacles for both players (1+2) are this many times wider, so two children fit side by side.
   togetherHold: 0.5, // s. Hand in hand: hold the right line this long (a lucky moment is not enough).
   jumpBuffer: 900, // ms. A jump this long before the Krabbel arrives still counts.
@@ -143,6 +147,7 @@ const S = {
   screen: "menu", // menu | game
   mode: MODES.tijd,
   boardOn: store.get("krabbels-testdemo-boardon", true),
+  spotOn: store.get("krabbels-testdemo-spot", true), // fixed spots (footprints) or find the right place yourself
   introOn: store.get("krabbels-testdemo-intro", true), // three explanation cards before the countdown // scoreboard shown or not (A/B test)
   duo: false,
   phase: "ready", // ready | countdown | play | fail | done
@@ -303,6 +308,7 @@ function startGame(modeKey) {
   S.pages = S.mode.key === "kalibratie" ? [] : buildCourse(S.mode, S.duo);
   S.k = { x: 0.06, y: 0, vy: 0, state: "walk", anim: 0, jump: null, look: 0 };
   S.speed = S.mode.speed || 0;
+  if (S.spotOn && S.pages.length) S.camX = camTarget();
   tracker.reset();
   showPanel(null);
 }
@@ -319,6 +325,7 @@ function endRound(kind) {
     spelers: S.duo ? "duo" : "solo",
     scorebord: S.boardOn ? "aan" : "uit",
     uitleg: S.introOn ? "aan" : "uit",
+    plek: S.spotOn ? "vast" : "zelf zoeken",
     afloop: kind === "done" ? "uitgespeeld" : kind === "time" ? "tijd op" : kind === "fail" ? "fout" : "gestopt",
     duur_s: S.runTime.toFixed(1),
     opgelost: S.cleared,
@@ -367,8 +374,28 @@ function connectAngle(o) {
 // How far (px) from the obstacle centre a player may stand. A wide "together"
 // obstacle counts its whole width, so both players can stand anywhere over it.
 function posTolFor(o) {
+  if (S.spotOn) return Infinity; // fixed spots: where you stand does not matter
   if (S.duo && o.owner === 3) return Infinity; // together: stand wherever you fit, side by side
   return (S.duo ? CFG.posTol.duo : CFG.posTol.solo) * W;
+}
+
+// --- Fixed spots ---
+// Screen x (px) of player i's footprints.
+const spotX = (i) => (S.duo ? CFG.spots.duo[i] : CFG.spots.solo[0]) * W;
+// Where an obstacle should sit on screen (fraction of W): right in front of its owner.
+function spotFrac(o) {
+  if (!S.duo) return CFG.spots.solo[0];
+  return o.owner === 3 ? 0.5 : CFG.spots.duo[o.owner - 1];
+}
+// The next obstacle player i still has to do. Fixed spots: one at a time.
+function nextFor(i) {
+  return allObs().find((o) => !o.cleared && !o.solved && ownersOf(o).includes(i));
+}
+// Camera position that puts the obstacle the Krabbel walks to in front of its owner.
+function camTarget() {
+  const k = S.k, o = nextObstacle();
+  const t = o ? o.xc - spotFrac(o) : k.x - 0.3;
+  return Math.min(t, k.x - 0.05); // keep the Krabbel on screen
 }
 
 // Seconds an obstacle's gesture must be held.
@@ -422,7 +449,9 @@ function updateSolving(dt) {
   const page = S.slideT >= 1 ? Math.round(S.camX) : S.slideTo;
   for (const o of allObs()) {
     if (o.solved || o.cleared || (o.t !== "connect" && o.t !== "ladder")) continue;
-    if (o.page !== page) continue;
+    if (S.spotOn) {
+      if (!ownersOf(o).every((i) => nextFor(i) === o)) continue; // only your next obstacle
+    } else if (o.page !== page) continue;
     if (o.seenAt === null) o.seenAt = S.runTime;
     const ok = S.duo && o.owner === 3 ? togetherFits(o) : ownersOf(o).every((i) => playerFits(i, o));
     o.match = ok ? o.match + dt : Math.max(0, o.match - dt * 2);
@@ -566,9 +595,9 @@ function updateKrabbel(dt) {
     }
   }
 
-  // Page change: slide the camera.
+  // Page change: slide the camera (fixed spots: the camera follows, see update()).
   const page = Math.floor(k.x);
-  if (page !== Math.round(S.camX) && S.slideT >= 1 && page < S.pages.length) {
+  if (!S.spotOn && page !== Math.round(S.camX) && S.slideT >= 1 && page < S.pages.length) {
     S.slideFrom = S.camX;
     S.slideTo = page;
     S.slideT = 0;
@@ -634,6 +663,7 @@ function update(dt) {
   S.effects = S.effects.filter((e) => e.t < 0.8);
 
   if (S.mode.key === "kalibratie") return;
+  if (S.spotOn && S.phase !== "fail") S.camX += (camTarget() - S.camX) * (1 - Math.exp(-dt * CFG.camFollow));
 
   if (S.phase === "ready") {
     const need = S.duo ? 2 : 1;
@@ -706,6 +736,7 @@ function draw() {
   if (S.mode.key === "kalibratie") return drawCalibration();
 
   drawWorld();
+  if (S.spotOn) drawSpots();
   drawSilhouettes();
   drawKrabbel();
   drawPrompts();
@@ -732,6 +763,7 @@ function drawCamera() {
 function drawWorld() {
   const first = Math.max(0, Math.floor(S.camX) - 1);
   const lastP = Math.min(S.pages.length - 1, Math.ceil(S.camX) + 1);
+  if (S.camX < 0) groundRect(S.camX - 0.1, 0, 0);
   for (let i = first; i <= lastP; i++) drawPage(S.pages[i]);
   if (S.mode.course !== "endless") {
     // Finish: a door at the end of the last page.
@@ -950,8 +982,13 @@ function drawPrompts() {
   if (S.phase !== "play" && S.phase !== "countdown" && S.phase !== "ready") return;
   const next = nextObstacle();
   for (const o of allObs()) {
-    if (o.cleared || o.page < Math.floor(S.camX) - 0 || o.page > Math.ceil(S.camX)) continue;
-    const isNext = o === next;
+    if (o.cleared) continue;
+    if (S.spotOn) {
+      const sx = px(o.xc);
+      if (sx < -W * 0.05 || sx > W * 1.05) continue;
+    } else if (o.page < Math.floor(S.camX) || o.page > Math.ceil(S.camX)) continue;
+    // Duo with fixed spots: each child sees their own next obstacle highlighted.
+    const isNext = o === next || (S.spotOn && S.duo && ownersOf(o).some((i) => nextFor(i) === o));
     const dist = o.stop - S.k.x;
     const close = isNext && dist < CFG.promptAhead;
     let now = false;
@@ -980,7 +1017,8 @@ function drawPrompt(o, scale, now, isNext) {
   ctx.strokeStyle = C.dark;
   ctx.stroke();
   const fg = now ? "#fff" : C.dark;
-  pictogram(o.t === "connect" && S.duo && o.owner === 3 ? "connect2" : o.t, x, y, s, fg, o.t === "connect" ? connectAngle(o) : 0);
+  // The next obstacle's pictogram plays its key poses; the others stand still.
+  pictogram(o.t === "connect" && S.duo && o.owner === 3 ? "connect2" : o.t, x, y, s, fg, o.t === "connect" ? connectAngle(o) : 0, isNext ? S.time / 1000 : null);
   const left = isNext ? graceLeft() : null;
   if (left !== null) {
     ctx.lineCap = "round";
@@ -1007,71 +1045,137 @@ function drawPrompt(o, scale, now, isNext) {
   ctx.restore();
 }
 
-// Stick figure pictograms in a box of size s around (x, y).
-function pictogram(type, x, y, s, color, angle = 0) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = s * 0.075;
+// --- Pictograms: the rig from Figma ------------------------------------------
+// Same body as the rig in Senne's Private Workspace ("Sleutelposes per pictogram").
+// Rig units = Figma px, origin between the hips. Angles in degrees, counter-clockwise
+// positive (like Figma's rotation field): arms point sideways at 0°, legs straight down.
+const RIG = { sh: [45, -242], hip: 45, neck: -262, headR: 60, headD: 82, seg: 120, limb: 40, torsoW: 130, torsoTop: -262, torsoBot: 18, ground: 262 };
+const rigPose = (o) => ({ b: 0, n: 0, sR: 0, eR: 0, sL: 0, eL: 0, hR: 0, kR: 0, hL: 0, kL: 0, lift: 0, ...o });
+const P_STAND = rigPose({ sR: -65, eR: -10, sL: 65, eL: 10, hR: 10, hL: -10 });
+const P_WIDE = (a) => rigPose({ sR: a, sL: a, hR: 12, hL: -12 });
+// Key poses per pictogram (2 to 4), played in a loop. "still" = the pose shown when not animated.
+const PICTO_KEYS = {
+  connect: (ang) => (Math.abs(ang) < 3 ? [P_STAND, rigPose({ sR: -30, sL: 30, hR: 10, hL: -10 }), P_WIDE(0)] : [P_STAND, P_WIDE(0), P_WIDE(ang)]),
+  ladder: () => [P_STAND, rigPose({ sR: 30, eR: 25, sL: -30, eL: -25, hR: 10, hL: -10 }), rigPose({ sR: 60, eR: 20, sL: -60, eL: -20, hR: 10, hL: -10 })],
+  jump: () => [
+    P_STAND,
+    rigPose({ sR: -50, eR: -30, sL: 50, eL: 30, hR: 30, kR: -60, hL: -30, kL: 60 }), // knees bent
+    rigPose({ sR: 60, eR: 15, sL: -60, eL: -15, hR: 14, kR: -20, hL: -14, kL: 20, lift: 140 }), // in the air
+    rigPose({ sR: -15, eR: -10, sL: 15, eL: 10, hR: 22, kR: -45, hL: -22, kL: 45 }), // landing
+  ],
+  duck: () => [P_STAND, rigPose({ sR: -45, eR: -10, sL: 45, eL: 10, hR: 30, kR: -55, hL: -30, kL: 55 }), rigPose({ sR: -20, eR: -15, sL: 20, eL: 15, hR: 60, kR: -115, hL: -60, kL: 115 })],
+  stand: () => [P_STAND],
+};
+const PICTO_STILL = { jump: 2 };
+// Hand in hand: two rigs, A (left) and B (right).
+const PICTO_KEYS2 = (ang) => [
+  [P_STAND, P_STAND],
+  [rigPose({ sR: -40, sL: 30, hR: 10, hL: -10 }), rigPose({ sR: -30, sL: 40, hR: 10, hL: -10 })], // reaching
+  [rigPose({ sR: -30, sL: ang, hR: 12, hL: -12 }), rigPose({ sR: ang, sL: 30, hR: 12, hL: -12 })], // hand in hand
+];
+const PICTO_T = { hold: 0.25, move: 0.35, last: 0.8 }; // seconds (same as the Figma prototype)
+
+// The pose at time t (seconds) in a loop of key poses; t = null gives the still pose.
+function poseAt(keys, t, still = keys.length - 1) {
+  if (keys.length === 1) return keys[0];
+  if (t === null) return keys[Math.min(still, keys.length - 1)];
+  const n = keys.length, { hold, move, last } = PICTO_T;
+  const period = n * (hold + move) + (last - hold);
+  let u = ((t % period) + period) % period;
+  for (let i = 0; i < n; i++) {
+    const h = i === n - 1 ? last : hold;
+    if (u < h) return keys[i];
+    u -= h;
+    if (u < move) {
+      const a = keys[i], b = keys[(i + 1) % n], f = ease(u / move), r = {};
+      for (const k in a) r[k] = lerp(a[k], b[k], f);
+      return r;
+    }
+    u -= move;
+  }
+  return keys[0];
+}
+
+// Rotate a vector counter-clockwise on screen (y points down).
+function rotV(x, y, deg) {
+  const r = (deg * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+  return [x * c + y * s, -x * s + y * c];
+}
+
+// Joint positions of a pose (forward kinematics, rig units).
+function rigPoints(p) {
+  const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
+  const arm = (side, sa, ea) => {
+    const sh = rotV(side * RIG.sh[0], RIG.sh[1], p.b);
+    const el = add(sh, rotV(side * RIG.seg, 0, p.b + sa));
+    return [sh, el, add(el, rotV(side * RIG.seg, 0, p.b + sa + ea))];
+  };
+  const leg = (side, ha, ka) => {
+    const hip = [side * RIG.hip, 0];
+    const kn = add(hip, rotV(0, RIG.seg, ha));
+    return [hip, kn, add(kn, rotV(0, RIG.seg, ha + ka))];
+  };
+  const neck = rotV(0, RIG.neck, p.b);
+  const tw = (RIG.torsoW - RIG.limb) / 2, tt = RIG.torsoTop + RIG.limb / 2, tb = RIG.torsoBot - RIG.limb / 2;
+  return {
+    armR: arm(1, p.sR, p.eR),
+    armL: arm(-1, p.sL, p.eL),
+    legR: leg(1, p.hR, p.kR),
+    legL: leg(-1, p.hL, p.kL),
+    torso: [[-tw, tt], [tw, tt], [tw, tb], [-tw, tb]].map(([x, y]) => rotV(x, y, p.b)),
+    head: add(neck, rotV(0, -RIG.headD, p.b + p.n)),
+  };
+}
+
+// Draw one rig: feet on the ground line gy (unless lifted), centred on x, k = px per rig unit.
+function drawRig(p, x, gy, k) {
+  const r = rigPoints(p);
+  const low = Math.max(...[...r.legR, ...r.legL, ...r.armR, ...r.armL, ...r.torso].map((q) => q[1])) + RIG.limb / 2;
+  const dy = -low - p.lift;
+  const T = (q) => [x + q[0] * k, gy + (q[1] + dy) * k];
+  const path = (pts, close = false) => {
+    ctx.beginPath();
+    pts.map(T).forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b)));
+    if (close) ctx.closePath();
+  };
+  ctx.lineWidth = RIG.limb * k;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  const head = (hx, hy) => {
-    ctx.beginPath();
-    ctx.arc(hx, hy, s * 0.085, 0, Math.PI * 2);
-    ctx.fill();
-  };
-  const line = (pts) => {
-    ctx.beginPath();
-    ctx.moveTo(pts[0], pts[1]);
-    for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+  path(r.torso, true); // filled and stroked: the stroke rounds the corners, like the rig
+  ctx.fill();
+  ctx.stroke();
+  for (const limb of [r.legR, r.legL, r.armR, r.armL]) {
+    path(limb);
     ctx.stroke();
-  };
-  const u = s * 0.1;
-  if (type === "stand") {
-    ctx.beginPath();
-    ctx.arc(0, -3.2 * u, s * 0.085, 0, Math.PI * 2);
-    ctx.fill();
-    line([0, -2.2 * u, 0, 1 * u]);
-    line([-1.2 * u, 4 * u, 0, 1 * u, 1.2 * u, 4 * u]);
-    line([-1.3 * u, 0.6 * u, -0.5 * u, -1.6 * u, 0.5 * u, -1.6 * u, 1.3 * u, 0.6 * u]);
-  } else if (type === "connect2") {
-    // two children hand in hand, outer arms along the line
-    const a = (-angle * Math.PI) / 180, L = 2.2 * u;
-    for (const sx of [-1.9, 1.9]) {
+  }
+  const h = T(r.head);
+  ctx.beginPath();
+  ctx.arc(h[0], h[1], RIG.headR * k, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// A pictogram in a box of size s around (x, y). t = seconds for the animation, null = still.
+function pictogram(type, x, y, s, color, angle = 0, t = null) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  const gy = y + 0.42 * s, u = s * 0.1;
+  if (type === "connect2") {
+    const k = (s * 0.55) / 700, keys = PICTO_KEYS2(angle);
+    drawRig(poseAt(keys.map((q) => q[0]), t), x - 252 * k, gy, k);
+    drawRig(poseAt(keys.map((q) => q[1]), t), x + 252 * k, gy, k);
+  } else {
+    const k = (s * 0.75) / 700;
+    if (type === "jump" || type === "duck") {
+      ctx.lineCap = "round";
+      ctx.lineWidth = type === "jump" ? s * 0.035 : s * 0.075;
       ctx.beginPath();
-      ctx.arc(sx * u, -3 * u, s * 0.07, 0, Math.PI * 2);
-      ctx.fill();
-      line([sx * u, -2.1 * u, sx * u, 0.8 * u]);
-      line([(sx - 0.9) * u, 3.6 * u, sx * u, 0.8 * u, (sx + 0.9) * u, 3.6 * u]);
+      const ly = type === "jump" ? gy + s * 0.03 : gy - 610 * k; // ground under the jump, bar above the duck
+      ctx.moveTo(x - 3 * u, ly);
+      ctx.lineTo(x + 3 * u, ly);
+      ctx.stroke();
     }
-    line([-1.9 * u - Math.cos(a) * L, -1.6 * u - Math.sin(a) * L, -1.9 * u, -1.6 * u, 0, -0.6 * u, 1.9 * u, -1.6 * u, 1.9 * u + Math.cos(a) * L, -1.6 * u + Math.sin(a) * L]);
-  } else if (type === "connect" || type === "ladder") {
-    head(0, -3.2 * u);
-    line([0, -2.2 * u, 0, 1 * u]); // body
-    line([-1.2 * u, 4 * u, 0, 1 * u, 1.2 * u, 4 * u]); // legs
-    if (type === "connect") {
-      const a = (-angle * Math.PI) / 180, L = 3.6 * u;
-      line([-Math.cos(a) * L, -1.6 * u - Math.sin(a) * L, Math.cos(a) * L, -1.6 * u + Math.sin(a) * L]);
-    } else {
-      line([-1.4 * u, -5 * u, -0.5 * u, -1.6 * u, 0.5 * u, -1.6 * u, 1.4 * u, -5 * u]);
-    }
-  } else if (type === "jump") {
-    head(0, -3.6 * u);
-    line([0, -2.6 * u, 0, 0.2 * u]);
-    line([-1.5 * u, -0.6 * u, 0, -2 * u, 1.5 * u, -0.6 * u]);
-    line([-1.1 * u, 1.6 * u, 0, 0.2 * u, 1.1 * u, 1.6 * u]);
-    line([-2.6 * u, 3.6 * u, 2.6 * u, 3.6 * u]); // ground
-    line([3.6 * u, -1 * u, 3.6 * u, -4.4 * u]); // arrow up
-    line([2.8 * u, -3.4 * u, 3.6 * u, -4.4 * u, 4.4 * u, -3.4 * u]);
-  } else if (type === "duck") {
-    head(0, -0.4 * u);
-    line([0, 0.5 * u, 0, 2.2 * u]);
-    line([-1.4 * u, 3.6 * u, -0.4 * u, 2.4 * u, 0.4 * u, 2.4 * u, 1.4 * u, 3.6 * u]);
-    line([-1.2 * u, 1.6 * u, 0, 1 * u, 1.2 * u, 1.6 * u]);
-    line([-3 * u, -2.6 * u, 3 * u, -2.6 * u]); // bar
-    line([3.8 * u, -1.6 * u, 3.8 * u, 2.4 * u]); // arrow down
-    line([3 * u, 1.4 * u, 3.8 * u, 2.4 * u, 4.6 * u, 1.4 * u]);
+    drawRig(poseAt(PICTO_KEYS[type](angle), t, PICTO_STILL[type]), x, gy, k);
   }
   ctx.restore();
 }
@@ -1110,7 +1214,7 @@ function drawSilhouettes(alpha = 1, big = false) {
     const shMid = { x: (b.lSh.x + b.rSh.x) / 2, y: (b.lSh.y + b.rSh.y) / 2 };
     const headR = Math.hypot(b.lSh.x - b.rSh.x, b.lSh.y - b.rSh.y) * 0.42;
     if (S.duo) text(String(i + 1), p.cx, Math.min(b.nose.y, shMid.y) - headR * 2.4, H * 0.04, C.mid);
-    if (S.screen === "game" && S.mode.key !== "kalibratie") drawStepHint(p, i);
+    if (S.screen === "game" && S.mode.key !== "kalibratie") S.spotOn ? drawSpotHint(p, i) : drawStepHint(p, i);
   });
 }
 
@@ -1137,6 +1241,42 @@ function drawFigure(g, b) {
   g.arc(b.nose.x, Math.min(b.nose.y, shMid.y - headR * 1.1), headR, 0, Math.PI * 2);
   g.fill();
   g.restore();
+}
+
+// Footprints on the floor where each child stands (fixed spots). Filled when someone stands on them.
+function drawSpots() {
+  const n = S.duo ? 2 : 1, y = CFG.silFloor * H, f = H * 0.02;
+  for (let i = 0; i < n; i++) {
+    const p = tracker.players[i], x = spotX(i);
+    const on = p.present && Math.abs(p.cx - x) <= CFG.spotTol * W;
+    const pulse = on ? 0 : 0.5 + 0.5 * Math.sin(S.time / 250);
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(x + side * f * 1.3, y - f * 0.4, f * 0.75, f * 1.4, side * 0.12, 0, Math.PI * 2);
+      ctx.fillStyle = on ? C.dark : "#fff";
+      ctx.fill();
+      ctx.lineWidth = 3 + 3 * pulse;
+      ctx.strokeStyle = C.dark;
+      ctx.stroke();
+    }
+    if (S.duo) text(String(i + 1), x - f * 3.6, y - f * 0.4, f * 1.3, C.dark);
+  }
+}
+
+// Fixed spots: arrow back to your footprints when you walked away from them.
+function drawSpotHint(p, i) {
+  if (S.phase !== "play" && S.phase !== "ready") return;
+  const dx = spotX(i) - p.cx;
+  if (Math.abs(dx) <= CFG.spotTol * W) return;
+  const dir = Math.sign(dx), y = FLOOR() + H * 0.09, x = p.cx + dir * H * 0.05;
+  ctx.fillStyle = C.dark;
+  ctx.beginPath();
+  ctx.moveTo(x + dir * H * 0.06, y);
+  ctx.lineTo(x, y - H * 0.03);
+  ctx.lineTo(x, y + H * 0.03);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillRect(dir > 0 ? x - H * 0.06 : x, y - H * 0.01, H * 0.06, H * 0.02);
 }
 
 // Arrow under a player who stands too far from their next obstacle.
@@ -1184,15 +1324,18 @@ function drawReady() {
   ctx.fillStyle = "rgba(255,255,255,0.75)";
   ctx.fillRect(0, 0, W, H);
   const need = S.duo ? 2 : 1, have = presentCount();
-  text(S.duo ? "Ga met twee voor de camera staan" : "Ga voor de camera staan", W / 2, H * 0.4, H * 0.05);
+  if (S.spotOn) drawSpots();
+  const where = S.spotOn ? (S.duo ? "Ga met twee op de voetjes staan" : "Ga op de voetjes staan") : S.duo ? "Ga met twee voor de camera staan" : "Ga voor de camera staan";
+  text(where, W / 2, H * 0.4, H * 0.05);
   text(`${Math.min(have, need)} / ${need}`, W / 2, H * 0.48, H * 0.04, C.mid);
   text("Spatie = toch starten", W / 2, H * 0.56, H * 0.022, "#999", "center", 500);
 }
 
 // --- short explanation before the countdown: three cards ---------------------
+// fig = a small figure on the card does it; step = it first walks to the obstacle (only when "zelf zoeken").
 const INTRO_CARDS = () => [
-  { pics: [S.duo ? "connect2" : "connect"], label: S.duo ? "Hand in hand = brug" : "Armen wijd = brug", step: !S.duo, sub: S.duo ? "Waar je maar wil" : "Ga erbij staan" },
-  { pics: ["ladder"], label: "Armen omhoog = ladder", step: true, sub: "Ga erbij staan" },
+  { pics: [S.duo ? "connect2" : "connect"], label: S.duo ? "Hand in hand = brug" : "Armen wijd = brug", fig: !S.duo, step: !S.duo && !S.spotOn, sub: S.spotOn ? "Blijf op je voetjes" : S.duo ? "Waar je maar wil" : "Ga erbij staan" },
+  { pics: ["ladder"], label: "Armen omhoog = ladder", fig: true, step: !S.spotOn, sub: S.spotOn ? "Blijf op je voetjes" : "Ga erbij staan" },
   { pics: ["jump", "duck"], label: "Spring of buk" },
 ];
 function drawIntro() {
@@ -1206,7 +1349,8 @@ function drawIntro() {
   const s = t % 2.8;
   const move = s < 0.6 ? 0 : s < 1.1 ? ease((s - 0.6) / 0.5) : 1;
   const armed = s >= 1.1, grow = clamp((s - 1.4) / 1.0, 0, 1), arrowOn = s < 1.1;
-  const stepFig = (fx, gy, pic, size) => pictogram(armed ? pic : "stand", fx, gy - size * 0.42, size, "#9a9a9a", 0);
+  // The small figure: stands, (walks,) then plays the gesture's key poses.
+  const stepFig = (fx, gy, pic, size, arm, at) => pictogram(arm ? pic : "stand", fx, gy - size * 0.42, size, "#9a9a9a", 0, arm ? at : null);
   const arrow = (ax, ay, len) => {
     if (!arrowOn || Math.sin(t * 12) < -0.3) return;
     ctx.fillStyle = C.dark;
@@ -1230,9 +1374,11 @@ function drawIntro() {
     ctx.strokeStyle = C.dark;
     ctx.stroke();
     text(String(i + 1), x + cw * 0.1, y0 + cw * 0.1, cw * 0.08, C.mid);
-    const pic = c.pics[Math.floor(t / 1.2) % c.pics.length];
-    const bob = Math.sin(t * 4 + i) * cw * 0.015;
-    pictogram(pic, x + cw / 2, y0 + ch * 0.27 + bob, cw * 0.34, C.dark, 0);
+    const pic = c.pics[Math.floor(t / 2.6) % c.pics.length];
+    pictogram(pic, x + cw / 2, y0 + ch * 0.27, cw * 0.34, C.dark, 0, t % 2.6);
+    // Without walking: the figure stands at the obstacle and the bridge / ladder grows in a loop.
+    const mv = c.step ? move : 1, arm = c.step ? armed : true, at = c.step ? s - 1.1 : t;
+    const gr = c.step ? grow : clamp(((t + 0.4) % 2.4) / 1.4 - 0.25, 0, 1), arrowOk = c.step;
     const gy = y0 + ch * 0.7, fs = cw * 0.24;
     ctx.lineCap = "round";
     if (i === 0) {
@@ -1241,11 +1387,11 @@ function drawIntro() {
       ctx.fillRect(x + cw * 0.06, gy, a - x - cw * 0.06, cw * 0.06);
       ctx.fillRect(b, gy, x + cw * 0.94 - b, cw * 0.06);
       let f = (t % 1.8) / 1.4;
-      if (c.step) {
-        const fx = lerp(x + cw * 0.14, (a + b) / 2, move);
-        stepFig(fx, gy, "connect", fs);
-        arrow(fx + fs * 0.35, gy - fs * 0.45, fs * 0.45);
-        f = grow;
+      if (c.fig) {
+        const fx = lerp(x + cw * 0.14, (a + b) / 2, mv);
+        stepFig(fx, gy, "connect", fs, arm, at);
+        if (arrowOk) arrow(fx + fs * 0.35, gy - fs * 0.45, fs * 0.45);
+        f = gr;
       }
       ctx.strokeStyle = C.dark;
       ctx.lineWidth = cw * 0.03;
@@ -1263,18 +1409,18 @@ function drawIntro() {
       const wx = x + cw * 0.62, top = gy - cw * 0.28;
       ctx.fillStyle = C.ground;
       ctx.fillRect(x + cw * 0.06, gy, cw * 0.88, cw * 0.04);
-      const fx = lerp(x + cw * 0.2, wx + cw * 0.06, move);
+      const fx = lerp(x + cw * 0.2, wx + cw * 0.06, mv);
       ctx.fillStyle = C.block;
       ctx.fillRect(wx, top, cw * 0.12, gy - top);
       ctx.save();
       ctx.globalAlpha *= 0.8;
-      stepFig(fx, gy, "ladder", fs);
+      stepFig(fx, gy, "ladder", fs, arm, at);
       ctx.restore();
-      arrow(fx + fs * 0.35, gy - fs * 0.45, fs * 0.45);
+      if (arrowOk) arrow(fx + fs * 0.35, gy - fs * 0.45, fs * 0.45);
       ctx.strokeStyle = C.dark;
       ctx.lineWidth = cw * 0.015;
-      const lx = wx - cw * 0.1, up = lerp(gy, top, grow);
-      if (grow > 0) {
+      const lx = wx - cw * 0.1, up = lerp(gy, top, gr);
+      if (gr > 0) {
         ctx.beginPath();
         ctx.moveTo(lx, gy);
         ctx.lineTo(lx, up);
@@ -1317,6 +1463,7 @@ function drawCalibration() {
   // Floor line
   ctx.fillStyle = C.light;
   ctx.fillRect(0, CFG.silFloor * H, W, 4);
+  if (S.spotOn) drawSpots();
   drawSilhouettes(1, true);
   const types = ["connect", "ladder", "jump", "duck"];
   const names = { connect: "Verbinden", ladder: "Ladder", jump: "Springen", duck: "Bukken" };
@@ -1423,6 +1570,7 @@ function renderMenu() {
   document.querySelectorAll("#players button").forEach((b) => b.classList.toggle("on", (b.dataset.p === "2") === S.duo));
   document.querySelectorAll("#boardon button").forEach((b) => b.classList.toggle("on", (b.dataset.b === "1") === S.boardOn));
   document.querySelectorAll("#introon button").forEach((b) => b.classList.toggle("on", (b.dataset.u === "1") === S.introOn));
+  document.querySelectorAll("#spoton button").forEach((b) => b.classList.toggle("on", (b.dataset.v === "1") === S.spotOn));
   document.querySelector(".boards").hidden = !S.boardOn;
   $("board-tijd").innerHTML = boardHtml("tijd", S.duo);
   $("board-score").innerHTML = boardHtml("score", S.duo);
@@ -1499,6 +1647,13 @@ document.querySelectorAll("#introon button").forEach((b) =>
   b.addEventListener("click", () => {
     S.introOn = b.dataset.u === "1";
     store.set("krabbels-testdemo-intro", S.introOn);
+    renderMenu();
+  })
+);
+document.querySelectorAll("#spoton button").forEach((b) =>
+  b.addEventListener("click", () => {
+    S.spotOn = b.dataset.v === "1";
+    store.set("krabbels-testdemo-spot", S.spotOn);
     renderMenu();
   })
 );
@@ -1769,6 +1924,19 @@ function sceneSvgs(width = 1920, height = 1080) {
 window.krabbels = {
   S,
   sim,
+  tracker,
+  fakePlayer,
+  startGame,
+  // Draw a pictogram on another canvas context (to check the poses): krabbels.picto(g, "jump", x, y, s, color, angle, t)
+  picto(g, ...args) {
+    const keep = ctx;
+    ctx = g;
+    try {
+      pictogram(...args);
+    } finally {
+      ctx = keep;
+    }
+  },
   sceneSvgs,
   frameSvg,
   step(seconds, dt = 1 / 60) {

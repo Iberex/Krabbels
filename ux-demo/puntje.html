@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Puntje-lab</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f2f2f2; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: #222; }
+    header { padding: 28px 32px 8px; }
+    h1 { margin: 0 0 6px; font-size: 30px; }
+    header p { margin: 0; color: #666; max-width: 820px; line-height: 1.45; }
+    .bar { display: flex; gap: 10px; align-items: center; padding: 14px 32px; flex-wrap: wrap; }
+    .bar button { border: 2px solid #d9d9d9; background: #fff; border-radius: 999px; padding: 6px 14px; font: 600 14px Inter, system-ui, sans-serif; cursor: pointer; }
+    .bar button.on { background: #222; color: #fff; border-color: #222; }
+    .bar span { color: #777; font-size: 14px; margin-left: 6px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; padding: 8px 32px 40px; }
+    .card { background: #fff; border-radius: 16px; padding: 12px 14px 14px; cursor: pointer; border: 2px solid transparent; }
+    .card:hover { border-color: #222; }
+    .card canvas { width: 100%; height: 230px; display: block; }
+    .card b { display: block; font-size: 16px; margin-top: 6px; }
+    .card small { color: #777; font-size: 12.5px; line-height: 1.35; display: block; margin-top: 2px; }
+    #groot { position: fixed; inset: 0; background: rgba(242, 242, 242, 0.97); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+    #groot.zicht { display: flex; }
+    #groot canvas { width: min(92vw, 1100px); height: min(64vh, 620px); background: #fff; border-radius: 20px; }
+    #groot .info { text-align: center; }
+    #groot .info b { font-size: 24px; }
+    #groot .info small { display: block; color: #666; margin-top: 4px; }
+    #groot .ctrl { display: flex; gap: 10px; align-items: center; }
+    #groot input[type=range] { width: 360px; }
+    #groot button { border: 2px solid #d9d9d9; background: #fff; border-radius: 999px; padding: 6px 14px; font: 600 14px Inter, system-ui, sans-serif; cursor: pointer; }
+    #groot button.on { background: #222; color: #fff; border-color: #222; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Puntje-lab</h1>
+    <p>Alle animaties van Puntje, zonder stijl. Ogen, wenkbrauwen, mond, armen en beentjes bewegen apart. Klik op een animatie om ze groot en vertraagd te bekijken. Pijltjes ← → = vorige / volgende, spatie = pauze, Esc = terug.</p>
+  </header>
+  <div class="bar" id="snelheid">
+    <button data-s="1" class="on">1×</button><button data-s="0.5">0,5×</button><button data-s="0.25">0,25×</button>
+    <span>snelheid van alles</span>
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <div id="groot">
+    <canvas id="gc"></canvas>
+    <div class="info"><b id="gnaam"></b><small id="ggebruik"></small></div>
+    <div class="ctrl">
+      <button id="gvorige">←</button>
+      <button id="gpauze">pauze</button>
+      <input type="range" id="gtijd" min="0" max="1000" value="0" />
+      <button id="gvolgende">→</button>
+      <button id="gterug">terug</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/puntje-lab.js?v=20261117e"></script>
+<a class="krabbels-overzicht" href="../" title="Terug naar het overzicht">← overzicht</a><style>.krabbels-overzicht{position:fixed;left:12px;bottom:12px;z-index:99999;font:600 13px/1 Inter,system-ui,-apple-system,'Segoe UI',sans-serif;color:#fff;background:rgba(34,34,34,.72);padding:8px 12px;border-radius:999px;text-decoration:none;opacity:.55}.krabbels-overzicht:hover{opacity:1}</style>
+</body>
+</html>

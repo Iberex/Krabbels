@@ -1,0 +1,62 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #fbfaf4;
+  font-family: "Fredoka", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* The video is only a source for the canvas; never shown directly. */
+#webcam {
+  display: none;
+}
+
+/* Full-window canvas. Its pixel size is set from main.js. */
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+/* Centered message box for loading and error states: a taped paper card. */
+#message {
+  position: fixed;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%) rotate(-1deg);
+  max-width: min(560px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 22px 24px 18px;
+  border-radius: 10px;
+  background: #fdfcf6;
+  color: #1f2340;
+  box-shadow: 2px 6px 16px rgba(31, 35, 64, 0.22);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: center;
+  display: none;
+}
+
+/* A piece of masking tape on top of the card */
+#message::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 120px;
+  height: 22px;
+  transform: translateX(-50%) rotate(2deg);
+  background: rgba(236, 222, 178, 0.85);
+}
+
+#message.visible {
+  display: block;
+}
+
+#message.error {
+  border: 3px solid #f04e45;
+}

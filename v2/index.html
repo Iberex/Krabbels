@@ -2,94 +2,11 @@
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Krabbels demo v2 (stijl)</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Grandstander:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261113d" />
+  <title>Krabbels · demo met stijl</title>
+  <meta http-equiv="refresh" content="0; url=../demo-stijl/" />
+  <link rel="canonical" href="../demo-stijl/" />
 </head>
 <body>
-  <video id="webcam" playsinline muted autoplay></video>
-  <canvas id="game"></canvas>
-
-  <!-- Menu -->
-  <section id="menu" class="panel">
-    <div class="card">
-      <header>
-        <h1>Krabbels <span>demo v2 · stijl</span></h1>
-        <div class="toggles">
-          <div class="seg" id="players" role="group" aria-label="Aantal spelers">
-            <button data-p="1" class="on">Solo</button>
-            <button data-p="2">Duo</button>
-          </div>
-          <div class="seg" id="boardon" role="group" aria-label="Scorebord">
-            <button data-b="1" class="on">Scorebord aan</button>
-            <button data-b="0">uit</button>
-          </div>
-          <div class="seg" id="introon" role="group" aria-label="Uitleg voor de start">
-            <button data-u="1" class="on">Uitleg aan</button>
-            <button data-u="0">uit</button>
-          </div>
-        </div>
-      </header>
-
-      <div class="modes">
-        <button data-mode="kalibratie"><kbd>0</kbd><b>Kalibratie</b><small>Je ziet je silhouet en wat het spel herkent</small></button>
-        <button data-mode="tijd"><kbd>1</kbd><b>Run · tijd</b><small>Zo snel mogelijk. Je kan niet doodgaan</small></button>
-        <button data-mode="score"><kbd>2</kbd><b>Run · score</b><small>Steeds sneller. Eén fout en het is gedaan. Maximaal 2 minuten</small></button>
-      </div>
-
-      <div class="boards">
-        <div><h2>Run · tijd <span class="who">solo</span></h2><div id="board-tijd"></div></div>
-        <div><h2>Run · score <span class="who">solo</span></h2><div id="board-score"></div></div>
-      </div>
-
-      <footer>
-        <div class="tools">
-          <button id="log-download" class="link">Testlog downloaden</button> <span id="log-count" class="muted"></span>
-          · <button id="clear-log" class="link">Testlog wissen</button>
-          · <button id="clear-boards" class="link">Scoreborden wissen</button>
-        </div>
-        <details>
-          <summary>Toetsen</summary>
-          <p><kbd>0</kbd>–<kbd>2</kbd> modus · <kbd>S</kbd> solo/duo · <kbd>Esc</kbd> terug naar menu · <kbd>F</kbd> volledig scherm · <kbd>C</kbd> camerabeeld · <kbd>D</kbd> debug · <kbd>T</kbd> stijl / grijs · <kbd>Spatie</kbd> starten zonder te wachten / uitleg overslaan</p>
-          <p>Testen zonder camera (speler 1 / speler 2): verbinden <kbd>B</kbd>/<kbd>N</kbd> · ladder <kbd>L</kbd>/<kbd>O</kbd> · springen <kbd>J</kbd>/<kbd>U</kbd> · bukken (ingedrukt houden) <kbd>K</kbd>/<kbd>I</kbd></p>
-        </details>
-      </footer>
-    </div>
-  </section>
-
-  <!-- End of a round -->
-  <section id="end" class="panel" hidden>
-    <div class="card small">
-      <h1 id="end-title">Klaar!</h1>
-      <p id="end-value" class="big"></p>
-      <div id="end-name">
-        <label for="end-name-input">Jouw naam</label>
-        <div class="row">
-          <input id="end-name-input" maxlength="14" autocomplete="off" placeholder="voornaam of bijnaam" />
-          <button id="end-save" class="primary">Bewaar</button>
-        </div>
-      </div>
-      <div id="end-board" class="endboard"></div>
-      <div class="row buttons">
-        <button id="end-again" class="primary">Opnieuw <kbd>Enter</kbd></button>
-        <button id="end-menu">Menu <kbd>Esc</kbd></button>
-      </div>
-    </div>
-  </section>
-
-  <div id="message"></div>
-
-  <script type="module" src="main.js?v=20261113d"></script>
-  <script>
-    // Without a server (file://) modules and the camera are blocked: say so.
-    if (location.protocol === "file:") {
-      var m = document.getElementById("message");
-      m.innerHTML = "<strong>Open deze pagina via een server.</strong><br>Lokaal: VS Code → Open with Live Server. Online: GitHub Pages.";
-      m.className = "visible error";
-    }
-  </script>
+  <p>De demo met stijl staat nu op <a href="../demo-stijl/">demo-stijl</a>.</p>
 </body>
 </html>
