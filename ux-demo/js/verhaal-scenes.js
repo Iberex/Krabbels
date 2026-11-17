@@ -145,7 +145,7 @@ function rondlopers(g, t, n = 4, dim = 1) {
   for (let i = 0; i < n; i++) {
     const a = t * (0.3 + i * 0.07) + i * 2.1, lane = 380 + i * 360;
     const st = Math.sin(t * 0.5 + i * 2) > 0.85 ? "zwaaien" : "lopen";
-    krabbel(g, OTHERS[i], lane + Math.sin(a) * 150, G + 4, 92, st, t + i, { flip: Math.cos(a) < 0 });
+    krabbel(g, OTHERS[i], lane + Math.sin(a) * 150, G + 4, 112, st, t + i, { flip: Math.cos(a) < 0 });
   }
   g.restore();
 }
@@ -203,7 +203,7 @@ function oversteken(g, E, kind, info, u, t) {
     if (o.gap) { const gx = (x - o.gap[0]) / (o.gap[1] - o.gap[0]); y = gx < 0 ? G + 4 : gx > 1 ? info.y2 + 4 : lerp(G, info.y2, gx) + 4; }
     if (kind === "springen") { lift = Math.sin(clamp((uu - 0.2) / 0.6, 0, 1) * Math.PI) * 200; st = "springen"; }
     if (kind === "bukken" && uu > 0.25 && uu < 0.8) st = "bukken";
-    krabbel(g, kr, x, y, 110, st, t + i, { lift });
+    krabbel(g, kr, x, y, 128, st, t + i, { lift });
   });
 }
 function wachten(g, E, info, st, t, kind = null) {
@@ -213,12 +213,12 @@ function wachten(g, E, info, st, t, kind = null) {
     if (OBS[kind].gap) { mood = atGap ? "bang" : "blij"; look = atGap ? [0.7, 0.9] : [-0.2, 0.3]; } // looks down into the gap, then at you
     else { mood = atGap ? "verrast" : "blij"; look = atGap ? [0.9, kind === "bukken" ? -0.8 : 0.2] : [-0.2, 0.3]; }
   }
-  (E.duo ? [MINE[0], MINE[1]] : [MINE[0]]).forEach((kr, i) => krabbel(g, kr, info.stop - (i ? 110 : 0), G + 4, 110, st, t + i, { mood, look }));
+  (E.duo ? [MINE[0], MINE[1]] : [MINE[0]]).forEach((kr, i) => krabbel(g, kr, info.stop - (i ? 120 : 0), G + 4, 128, st, t + i, { mood, look }));
 }
 // Puntje draws a bridge: his point on the bridge tip
 function tekentBrug(g, kind, built, t) {
   const o = OBS[kind], y2 = G + o.dh, bx = lerp(o.gap[0], o.gap[1], built), by = lerp(G, y2, built);
-  puntjePose(g, { lean: 24, tipDown: 1, aL: 30, eL: -40, aR: -25, eR: 35, lookY: 1, brow: -0.3, smile: 0, mouth: 0.2 }, bx + Math.sin(24 * Math.PI / 180) * 74.5, by, 1.15);
+  puntjePose(g, { lean: 24, tipDown: 1, aL: 30, eL: -40, aR: -25, eR: 35, lookY: 1, brow: -0.3, smile: 0, mouth: 0.2 }, bx + Math.sin(24 * Math.PI / 180) * 74.5 * 1.3, by, 1.3);
 }
 
 // --- one obstacle beat: tutorial (Puntje shows it) or game (pictogram), optional "help" ---------------------------
@@ -254,7 +254,7 @@ function beat(E, kind, t, { mode = "spel", dur = 6, owner = null, helpAt = null 
       puntjeAnim(g, o.poseP, t - T.show[0], lerp(1500, 1460, k), lerp(820, 1060, k), lerp(1, 1.9, k));
     } else if (holds && built > 0 && built < 1) tekentBrug(g, kind, built, t);
     else if (T.none && t > T.none[0] && t < T.self[0]) puntjeAnim(g, "oei", t, 1460, 1060, 1.9);
-    else puntjeAnim(g, crossing > 0 || built >= 1 ? "juichen" : "rust", t, 1500, 820, 1);
+    else puntjeAnim(g, crossing > 0 || built >= 1 ? "juichen" : "rust", t, 1520, 820, 1.3);
   });
   E.kids(kidOn ? { g: o.geb, t: t - T.kid[0], angle: o.angle || 0, who: kind === "dubbel" ? null : owner } : null);
 }
@@ -262,13 +262,43 @@ function beat(E, kind, t, { mode = "spel", dur = 6, owner = null, helpAt = null 
 // --- the scenes ----------------------------------------------------------------------------------------------
 // chapter = number in the menu; dur in seconds; draw(E, t) with E = the room (see verhaal.js)
 export const SCENES = [
+  { ch: 0, title: "Het concept", sub: "Een kind tekent een Krabbel op de iPad. Die springt op de muur en wil naar het kind toe. Met hun lichaam tonen de kinderen Puntje wat hij moet tekenen, zodat Krabbel kan ontsnappen.", dur: 9, draw(E, t) {
+    E.wall((g) => {
+      papier(g); grond(g); rondlopers(g, t, 2, 0.35);
+      const a0 = easeOut(seg(t, 0.2, 1));
+      g.save(); g.globalAlpha = a0; g.translate(960, 150 - (1 - a0) * 30); g.scale(1.9, 1.9); logo(g, -150, 0, 1); g.restore();
+      g.save(); g.globalAlpha = easeOut(seg(t, 0.8, 1.6));
+      text(g, "Teken een Krabbel. Help hem met je lichaam. Hij ontsnapt naar de echte wereld.", 960, 255, 40, "#666", "center", 600);
+      g.restore();
+      const panels = [
+        ["1", "Teken je Krabbel", "op de iPad", (x, y) => { rr(g, x - 120, y - 85, 240, 170, 18); g.fillStyle = "#1d1d1f"; g.fill(); rr(g, x - 106, y - 72, 212, 144, 6); g.fillStyle = "#fff"; g.fill(); const f = clamp((t - 3.2) / 1.6, 0, 1); tekenDeel(g, DRAW[0], f, x - 65, y - 62, 0.43); if (f >= 1) oogjes(g, x - 65 + DRAW[0].eyes[0].x * 0.43, y - 62 + DRAW[0].eyes[0].y * 0.43, 0.8, "rond"); }],
+        ["2", "Help hem met je lichaam", "op de muur", (x, y) => { g.save(); g.globalAlpha = 0.35; gebaar(g, "verbinden", x, y - 30, 240, C.kid, t); g.restore(); g.fillStyle = C.grass; g.fillRect(x - 130, y + 60, 90, 30); g.fillRect(x + 40, y + 60, 90, 30); const b = clamp(((t - 4.2) % 3) / 1.2, 0, 1); line(g, [x - 40, y + 60, x - 40 + 80 * b, y + 60], C.ink, 7); krabbel(g, MINE[0], lerp(x - 90, x + 90, clamp(((t - 4.2) % 3 - 1.3) / 1.2, 0, 1)), y + 62, 48, b >= 1 ? "lopen" : "omkijken", t); }],
+        ["3", "Hij ontsnapt", "naar de monitor", (x, y) => { g.lineWidth = 5; g.strokeStyle = C.ink; g.fillStyle = C.door; g.fillRect(x - 120, y - 60, 70, 120); g.strokeRect(x - 120, y - 60, 70, 120); line(g, [x - 30, y, x + 10, y], C.led, 7); line(g, [x - 2, y - 12, x + 12, y, x - 2, y + 12], C.led, 7); g.save(); g.beginPath(); g.rect(x + 25, y - 55, 110, 70); g.clip(); g.translate(x + 25, y - 55); wereld(g, 110, 70, t, { mine: MINE[0], mineT: (t % 6) + 1 }); g.restore(); g.fillStyle = "#1d1d1f"; g.fillRect(x + 76, y + 18, 8, 50); g.lineWidth = 6; g.strokeStyle = "#1d1d1f"; g.strokeRect(x + 22, y - 58, 116, 76); }],
+      ];
+      panels.forEach(([n, title, where, art], i) => {
+        const k = easeBack(seg(t, 1.6 + i * 0.6, 2.2 + i * 0.6)); if (k <= 0) return;
+        const x = 480 + i * 480, y = 520;
+        g.save(); g.translate(x, y); g.scale(k, k); g.translate(-x, -y);
+        rr(g, x - 200, y - 170, 400, 380, 30); g.fillStyle = "#fff"; g.fill(); g.lineWidth = 4; g.strokeStyle = "#e4dfd4"; g.stroke();
+        dot(g, x - 160, y - 130, 26, C.ink); text(g, n, x - 160, y - 128, 30, "#fff", "center", 800);
+        art(x, y - 10);
+        text(g, title, x, y + 140, 34, C.ink, "center", 800);
+        text(g, where, x, y + 180, 26, "#888", "center", 600);
+        g.restore();
+      });
+      if (t > 2) puntjeAnim(g, t < 5 ? "zwaaien" : "zweven", t, 1720, 330, 1.25);
+    });
+    E.ipad(0, (g) => tikScherm(g, t)); E.ipad(1, (g) => tikScherm(g, t + 0.4));
+    E.mon((g) => { wereld(g, 1920, 1080, t); logo(g, 60, 80, 0.9); });
+    E.kids(null, [false, false]);
+  } },
   { ch: 1, title: "Voor het spelen", sub: "Puntje zweeft rond, zwaait, wijst naar de iPads en klopt op het glas. Op de monitor: de Krabbelwereld.", dur: 11, draw(E, t) {
     E.wall((g) => {
       papier(g); grond(g); rondlopers(g, t, 4); logo(g, 60, 70, 0.8);
       const acts = [["zweven", 0, 2.6], ["zwaaien", 2.6, 4.2], ["zweven", 4.2, 5.4], ["wijzen", 5.4, 7.6], ["zweven", 7.6, 8.4], ["tikken", 8.4, 11]];
       const a = acts.find((q) => t >= q[1] && t < q[2]) || acts[0];
       if (a[0] === "tikken") { const k = easeOut(seg(t, 8.4, 9)); puntjeAnim(g, "tikken", t - 8.4, lerp(1200, 1000, k), lerp(600, 1050, k), lerp(1, 2.4, k)); }
-      else { const x = 960 + Math.sin(t * 0.55) * 620, y = 560 + Math.sin(t * 1.15) * 120; puntjeAnim(g, a[0], t - a[1], x, y, 1.2, { flip: a[0] === "wijzen" && x > 960 }); }
+      else { const x = 960 + Math.sin(t * 0.55) * 620, y = 560 + Math.sin(t * 1.15) * 120; puntjeAnim(g, a[0], t - a[1], x, y, 1.55, { flip: a[0] === "wijzen" && x > 960 }); }
     });
     E.ipad(0, (g) => tikScherm(g, t)); E.ipad(1, (g) => tikScherm(g, t + 0.4));
     E.mon((g) => { wereld(g, 1920, 1080, t); logo(g, 60, 80, 0.9); });
@@ -332,49 +362,54 @@ export const SCENES = [
     E.mon((g) => wereld(g, 1920, 1080, t));
   } },
 
-  { ch: 5, title: "Intro: het glas", sub: "De Krabbel wil naar het kind, maar botst tegen het glas: een barstje dat vanzelf herstelt. Hij valt, denkt na en gaat terug naar Puntje.", dur: 9, draw(E, t) {
+  { ch: 5, title: "Intro: het glas", sub: "De Krabbel wil naar het kind, maar botst tegen het glas: een barstje dat vanzelf herstelt. Hij valt, denkt na en gaat terug naar Puntje.", dur: 9.5, draw(E, t) {
     E.kids(null, [true, E.duo]);
     E.wall((g) => {
       papier(g); grond(g);
-      puntjeAnim(g, "rust", t, 1400, G, 1);
+      puntjeAnim(g, t > 7.4 ? "wenken" : "rust", t, 1480, G, 1.55);
       (E.duo ? [0, 1] : [0]).forEach((i) => {
-        const bx = 900 - i * 200;
+        const bx = 880 - i * 230, KH = 150;
         let x = bx, y = G + 4, sc = 1, st = "zwaaien";
-        if (t > 1.2 && t < 3) { const k = ease(seg(t, 1.2, 3)); y = lerp(G + 4, 1040, k); sc = lerp(1, 2.4, k); st = "lopen"; }
-        else if (t >= 3 && t < 5.6) { y = 1040; sc = 2.4; st = "zitten"; x = bx + Math.sin((t - 3) * 40) * 6 * Math.max(0, 1 - (t - 3) * 2); }
-        else if (t >= 5.6) { const k = ease(seg(t, 5.6, 7.6)); y = lerp(1040, G + 4, k); sc = lerp(2.4, 1, k); x = lerp(bx, bx + 240, k); st = k < 1 ? "lopen" : "staan"; }
-        const mood = t < 3 ? "blij" : t < 4 ? "verrast" : t < 5.6 ? "oei" : "neutraal";
-        krabbel(g, MINE[i], x, y, 110, st, t, { scale: sc, flip: t >= 5.6 && t < 7.6, mood, look: t < 3 ? [-0.1, 0.5] : t < 5.6 ? [0.3, -0.6] : null });
-        if (t > 4 && t < 5.8) vraagteken(g, x + 30, y - 110 * sc * 1.5, seg(t, 4, 4.4));
+        if (t > 1.3 && t < 3.1) { const k = ease(seg(t, 1.3, 3.1)); y = lerp(G + 4, 1040, k); sc = lerp(1, 2.1, k); st = "lopen"; }
+        else if (t >= 3.1 && t < 5.8) { y = 1040; sc = 2.1; st = "zitten"; x = bx + Math.sin((t - 3.1) * 40) * 8 * Math.max(0, 1 - (t - 3.1) * 2); }
+        else if (t >= 5.8) { const k = ease(seg(t, 5.8, 7.6)); y = lerp(1040, G + 4, k); sc = lerp(2.1, 1, k); x = lerp(bx, bx + 260, k); st = k < 1 ? "lopen" : "omkijken"; }
+        const mood = t < 3.1 ? "blij" : t < 4 ? "verrast" : t < 5.8 ? "oei" : t > 7.6 ? "nieuwsgierig" : "neutraal";
+        krabbel(g, MINE[i], x, y, KH, st, t, { scale: sc, flip: t >= 5.8 && t < 7.6, mood, look: t < 3.1 ? [-0.1, 0.5] : t < 5.8 ? [0.3, -0.6] : t > 7.6 ? [0.8, -0.4] : null });
+        if (t > 4 && t < 6) vraagteken(g, x + 50, y - KH * sc * 1.45, seg(t, 4, 4.4) * (1 - seg(t, 5.6, 6)));
       });
-      barst(g, 900, 760, t > 3 ? 1 - seg(t, 4.2, 6) : 0);
+      barst(g, 880, 790, t > 3.1 ? 1 - seg(t, 4.4, 6.2) : 0);
     });
     E.mon((g) => wereld(g, 1920, 1080, t));
   } },
-
-  { ch: 5, title: "Intro: het idee", sub: "Puntje denkt na en krijgt een idee. In de tekstballon: een deur naar de Krabbelwereld, en een kloof waar hij een brug over tekent.", dur: 12, draw(E, t) {
+  { ch: 5, title: "Intro: het idee", sub: "Puntje denkt na en krijgt een idee. In de tekstballon: een deur naar de Krabbelwereld, en een kloof waar hij een brug over tekent. Zo kan Krabbel naar het kind.", dur: 12.5, draw(E, t) {
     E.kids(null, [true, E.duo]);
     E.wall((g) => {
-      papier(g); grond(g);
-      (E.duo ? [0, 1] : [0]).forEach((i) => krabbel(g, MINE[i], 1140 - i * 130, G + 4, 110, t > 8.5 && t < 10 ? "juichen" : t > 3.6 ? "omkijken" : "staan", t + i, { mood: t > 8.5 && t < 10 ? null : t > 3.6 ? "nieuwsgierig" : "oei", look: t > 3.6 ? [0.2, -0.9] : [0.9, -0.3] }));
+      // camera: in close on the two of them, like a dialogue without words
+      const zin = ease(seg(t, 0, 1)) * (1 - ease(seg(t, 11.6, 12.5)));
+      const z = lerp(1, 1.9, zin), cx = lerp(960, 1270, zin), cy = lerp(540, G - 250, zin);
+      const scr = (x, y) => [960 + (x - cx) * z, 540 + (y - cy) * z];
       const px = 1400, py = G;
+      g.save(); g.translate(960, 540); g.scale(z, z); g.translate(-cx, -cy);
+      papier(g); grond(g, [[-1500, 3500, G]]);
+      (E.duo ? [0, 1] : [0]).forEach((i) => krabbel(g, MINE[i], 1140 - i * 130, G + 4, 115, t > 8.8 && t < 10.4 ? "juichen" : t > 3.6 ? "omkijken" : "staan", t + i, { mood: t > 8.8 && t < 10.4 ? null : t > 3.6 ? "nieuwsgierig" : "oei", look: t > 3.6 ? [0.3, -0.9] : [0.9, -0.3] }));
       if (t < 2.6) puntjePose(g, { aR: 40, eR: 125, lookY: -0.6, lookX: 0.4, brow: 0.3, browTilt: 0.7, smile: 0, air: HOVER + Math.sin(t * 2) * 4, lean: Math.sin(t * 1.5) * 4 }, px, py, 1.15);
-      else puntjeAnim(g, t < 3.6 ? "juichen" : "wijzen", t - 2.6, px, py, 1.15, { flip: true });
-      if (t > 2.6 && t < 3.8) lamp(g, px, py - 260, seg(t, 2.6, 2.9) * (1 - seg(t, 3.5, 3.8)));
-      // the speech bubble
-      const open = seg(t, 3.6, 4.0) * (1 - seg(t, 10.6, 11));
+      else puntjeAnim(g, t < 3.6 ? "juichen" : t < 10.6 ? "wijzen" : "rust", t - 2.6, px, py, 1.15, { flip: true });
+      if (t > 2.6 && t < 3.8) lamp(g, px, py - 255, seg(t, 2.6, 2.9) * (1 - seg(t, 3.5, 3.8)));
+      g.restore();
+      // the speech bubble (screen space, big)
+      const open = seg(t, 3.6, 4.1) * (1 - seg(t, 10.8, 11.3));
       if (open > 0) {
-        g.save(); g.translate(1040, 420); g.scale(easeBack(open), easeBack(open)); g.translate(-1040, -420);
-        bubble(g, 640, 120, 800, 470, px - 60, py - 170);
-        g.save(); g.beginPath(); g.rect(670, 150, 740, 410); g.clip();
-        if (t < 6.6) deurNaarWereld(g, 1040, 355, 1, t);
-        else kloofMetBrug(g, 670, 150, 740, 410, seg(t, 7.2, 9.4), t);
+        const head = scr(px - 20, py - 250), k = easeBack(open);
+        g.save(); g.translate(760, 300); g.scale(k, k); g.translate(-760, -300);
+        bubble(g, 330, 40, 860, 440, head[0], head[1]);
+        g.save(); g.beginPath(); g.rect(360, 70, 800, 380); g.clip();
+        if (t < 6.8) { g.save(); g.translate(760, 262); g.scale(1.15, 1.15); deurNaarWereld(g, 0, 0, 1, t); g.restore(); }
+        else kloofMetBrug(g, 360, 70, 800, 380, seg(t, 7.3, 9.4), t);
         g.restore(); g.restore();
       }
     });
     E.mon((g) => wereld(g, 1920, 1080, t));
   } },
-
   { ch: 5, title: "Intro: jouw figuur", sub: "Puntje vliegt omhoog en tekent het silhouet van het kind. Beweegt het kind, dan beweegt het silhouet mee.", dur: 8, draw(E, t) {
     const moving = t > 5.2;
     E.kids(moving ? { g: "verbinden", t: t - 5.2, angle: 0 } : null, [true, E.duo]);
@@ -421,23 +456,26 @@ export const SCENES = [
   { ch: 6, title: "Spel: bukken", sub: "Het kind bukt, de Krabbel bukt onder de balk.", dur: 5, draw(E, t) { beat(E, "bukken", t, { dur: 5, owner: 1 }); E.mon((g) => wereld(g, 1920, 1080, t)); } },
   { ch: 6, title: "Spel: brug / dubbele brug", sub: "Solo: een brug. Duo: de dubbele brug, het enige obstakel op dit level. Hand in hand.", dur: 6, draw(E, t) { beat(E, E.duo ? "dubbel" : "brug", t, { dur: 6, owner: 0 }); E.mon((g) => wereld(g, 1920, 1080, t)); } },
 
-  { ch: 7, title: "Einde: de deur", sub: "Na alle levels: de Krabbel doet de deur open en wandelt erdoor. Puntje zwaait.", dur: 7, draw(E, t) {
+  { ch: 7, title: "Einde: de deur", sub: "Na alle levels: de Krabbel doet de deur open en wandelt erdoor, naar de echte wereld. Puntje zwaait.", dur: 7.5, draw(E, t) {
     E.kids(null, [true, E.duo]);
     E.wall((g) => {
-      papier(g); silhouet(g, E, "staan", null); grond(g);
+      const zin = ease(seg(t, 0, 1.2)), z = lerp(1, 1.4, zin), cx = lerp(960, 1080, zin), cy = lerp(540, G - 290, zin);
+      g.save(); g.translate(960, 540); g.scale(z, z); g.translate(-cx, -cy);
       const dx = 1240, open = seg(t, 2.6, 3.4);
-      g.fillStyle = C.sky; g.fillRect(dx - 80, G - 280, 160, 280); // behind the door: the world
-      wereld(g, 1920, 1080, t); // will be clipped below
-      g.save(); g.beginPath(); g.rect(0, 0, 1920, 1080); g.rect(dx - 80, G - 280, 160, 280); g.clip("evenodd"); papier(g); silhouet(g, E, "staan", null); grond(g); g.restore();
+      const bg = () => { papier(g); silhouet(g, E, "staan", null); grond(g, [[-1500, 3500, G]]); };
+      g.save(); g.beginPath(); g.rect(dx - 80, G - 280, 160, 280); g.clip(); g.translate(dx - 80, G - 280); wereld(g, 160, 280, t); g.restore();
+      g.save(); g.beginPath(); g.rect(-2000, -2000, 6000, 6000); g.rect(dx - 80, G - 280, 160, 280); g.clip("evenodd"); bg(); g.restore();
       g.lineWidth = 8; g.strokeStyle = C.ink; g.strokeRect(dx - 80, G - 280, 160, 280);
       g.fillStyle = C.door; g.fillRect(dx - 80, G - 280, 160 * (1 - open * 0.85), 280); g.strokeRect(dx - 80, G - 280, 160 * (1 - open * 0.85), 280);
       if (open < 0.5) dot(g, dx + 50, G - 140, 9, C.ink);
+      if (open > 0.6) glinsters(g, dx, G - 140, 120, t);
       (E.duo ? [0, 1] : [0]).forEach((i) => {
-        const u = seg(t, 0.4, 2.6), w = seg(t, 3.6, 5.6) - i * 0.1;
-        const x = w > 0 ? lerp(dx - 120, dx + 10, w) - i * 100 : lerp(500, dx - 120, ease(u)) - i * 100;
-        krabbel(g, MINE[i], x, G + 4, 110, u < 1 ? "lopen" : w > 0 ? "lopen" : "zwaaien", t + i, { alpha: 1 - clamp((w - 0.7) / 0.3, 0, 1) });
+        const u = seg(t, 0.4, 2.6), w = seg(t, 3.8, 5.8) - i * 0.12;
+        const x = w > 0 ? lerp(dx - 120, dx + 10, w) - i * 100 : lerp(560, dx - 120, ease(u)) - i * 100;
+        krabbel(g, MINE[i], x, G + 4, 125, u < 1 ? "lopen" : w > 0 ? "lopen" : "zwaaien", t + i, { alpha: 1 - clamp((w - 0.7) / 0.3, 0, 1), mood: u >= 1 && w <= 0 ? "juichen" : null });
       });
-      puntjeAnim(g, "zwaaien", t, 700, G, 1.1);
+      puntjeAnim(g, t < 3.8 ? "zwaaien" : "juichen", t, 760, G, 1.3);
+      g.restore();
     });
     E.mon((g) => wereld(g, 1920, 1080, t));
   } },

@@ -58,14 +58,20 @@ function strip(g, pts, lit = null) {
 }
 
 // --- devices ------------------------------------------------------------------------------------------
-function device(g, d, fn, kind) {
+function device(g, d, fn, kind, prevFn = null, fadeA = 0) {
   g.save();
   if (kind === "ipad") { rr(g, d.x - 12, d.y - 12, d.w + 24, d.h + 24, 18); g.fillStyle = "#1d1d1f"; g.fill(); g.fillStyle = "#8d877b"; g.fillRect(d.x + d.w / 2 - 7, d.y + d.h + 12, 14, 1062 - d.y - d.h - 12); g.fillRect(d.x + d.w / 2 - 40, 1056, 80, 8); }
   if (kind === "mon") { g.fillStyle = "#1d1d1f"; rr(g, d.x - 10, d.y - 10, d.w + 20, d.h + 20, 8); g.fill(); g.fillRect(d.x + d.w / 2 - 6, d.y + d.h + 10, 12, 1062 - d.y - d.h - 10); g.fillRect(d.x + d.w / 2 - 45, 1056, 90, 8); }
   if (kind === "wall") { g.fillStyle = "rgba(0,0,0,0.12)"; g.fillRect(d.x + 8, d.y + 10, d.w, d.h); }
   g.beginPath(); g.rect(d.x, d.y, d.w, d.h); g.clip();
   g.fillStyle = "#000"; g.fillRect(d.x, d.y, d.w, d.h);
-  if (fn) { g.translate(d.x, d.y); g.scale(d.w / d.vw, d.h / d.vh); fn(g); }
+  g.translate(d.x, d.y); g.scale(d.w / d.vw, d.h / d.vh);
+  if (fn) { g.save(); fn(g); g.restore(); }
+  if (fadeA > 0 && (prevFn || fn)) {
+    g.save(); g.globalAlpha = fadeA;
+    if (prevFn) prevFn(g); else { g.fillStyle = "#000"; g.fillRect(0, 0, d.vw, d.vh); }
+    g.restore();
+  }
   g.restore();
   if (kind === "wall") { // the glass in front of the wall
     g.save(); g.strokeStyle = "rgba(120,160,200,0.35)"; g.lineWidth = 6; g.strokeRect(d.x - 6, d.y - 6, d.w + 12, d.h + 12); g.restore();
@@ -78,12 +84,9 @@ function label(g, s, x, y) {
 }
 
 // --- draw a frame -----------------------------------------------------------------------------------------
-function frame(now) {
-  const dt = Math.min(0.1, (now - (frame.last || now)) / 1000); frame.last = now;
-  if (P.playing) P.T += dt * P.speed;
-  const { s, t } = current();
-
-  // collect what the scene wants
+const FADE = 0.55;
+const smooth01 = (u) => u * u * (3 - 2 * u);
+function collect(scene, t, now) {
   const calls = { wall: null, ipad: [null, null], mon: null, kids: null, pulses: [] };
   const E = {
     duo: P.duo, now: now / 1000,
@@ -92,7 +95,17 @@ function frame(now) {
     kids: (gest, present = [true, P.duo], alpha = [1, 1]) => (calls.kids = { gest, present, alpha }),
     pulse: (name, p, carry, i = 0) => calls.pulses.push({ name, p, carry, i }),
   };
-  try { s.draw(E, t); } catch (e) { console.error(e); }
+  try { scene.draw(E, t); } catch (e) { console.error(e); }
+  return calls;
+}
+function frame(now) {
+  const dt = Math.min(0.1, (now - (frame.last || now)) / 1000); frame.last = now;
+  if (P.playing) P.T += dt * P.speed;
+  const { s, t } = current();
+  const calls = collect(s, t, now);
+  // soft transition: the previous scene fades out over the new one
+  let prev = null, fadeA = 0;
+  if (!P.extra && t < FADE && P.T >= FADE) { const i = MAIN.indexOf(s), ps = MAIN[(i - 1 + MAIN.length) % MAIN.length]; prev = collect(ps, ps.dur - 0.001, now); fadeA = 1 - smooth01(t / FADE); }
 
   const g = ctx;
   g.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -110,8 +123,8 @@ function frame(now) {
   // strips (base)
   for (const k in STRIPS) { const pl = calls.pulses.find((q) => q.name === k && q.p > 0 && q.p < 1); strip(g, STRIPS[k], pl ? pl.p : null); }
   // wall + monitor
-  device(g, WALL, calls.wall, "wall");
-  device(g, MON, calls.mon, "mon");
+  device(g, WALL, calls.wall, "wall", prev && prev.wall, fadeA);
+  device(g, MON, calls.mon, "mon", prev && prev.mon, fadeA);
   // the children (seen from behind), standing at their iPad
   if (calls.kids) KID_X.forEach((x, i) => {
     if (!calls.kids.present[i]) return;
@@ -122,21 +135,48 @@ function frame(now) {
     g.restore();
   });
   // iPads
-  IPADS.forEach((d, i) => device(g, d, calls.ipad[i], "ipad"));
+  IPADS.forEach((d, i) => device(g, d, calls.ipad[i], "ipad", prev && prev.ipad[i], fadeA));
   // labels
   label(g, "Muur · beamer", WALL.x + WALL.w / 2, WALL.y + WALL.h + 22);
   label(g, "iPad 1", IPADS[0].x + IPADS[0].w / 2, IPADS[0].y - 28);
   label(g, "iPad 2", IPADS[1].x + IPADS[1].w / 2, IPADS[1].y - 28);
   label(g, "Monitor · uitgang", MON.x + MON.w / 2, MON.y - 30);
 
+  banner(g, s, t);
   ui(s, t);
   requestAnimationFrame(frame);
 }
 
+// --- chapter banner: at the start of every chapter, in big letters over the wall ---------------------------------
+const CH_LINE = {
+  1: "De installatie wacht op kinderen en lokt ze naar de iPads.",
+  2: "Een kind stapt naar de iPad. Puntje komt het halen.",
+  3: "Het kind tekent zijn eigen Krabbel, samen met Puntje.",
+  4: "De tekening komt tot leven en springt op de muur.",
+  5: "Krabbel wil naar het kind. Puntje bedenkt een plan en leert de bewegingen aan.",
+  6: "Met hun lichaam helpen de kinderen Krabbel over de obstakels.",
+  7: "Krabbel ontsnapt naar de echte wereld: de monitor aan de uitgang.",
+  8: "Wat gebeurt er als een kind wegloopt van de iPad?",
+};
+function banner(g, s, t) {
+  if (!s.ch || P.extra && s.ch !== 8) return;
+  const first = s.extra || MAIN.find((q) => q.ch === s.ch) === s;
+  if (!first || t > 3) return;
+  const a = Math.min(smooth01(clamp(t / 0.4, 0, 1)), 1 - smooth01(clamp((t - 2.4) / 0.6, 0, 1)));
+  if (a <= 0) return;
+  const x = WALL.x + WALL.w / 2, y = WALL.y + 120, w = 900, h = 150;
+  g.save(); g.globalAlpha = a; g.translate(0, (1 - a) * -16);
+  rr(g, x - w / 2, y - h / 2, w, h, 28); g.fillStyle = "rgba(29,29,31,0.9)"; g.fill();
+  text(g, s.ch === 8 ? "Uitzondering" : `Hoofdstuk ${s.ch}`, x, y - 42, 22, "#ffcf3a", "center", 700);
+  text(g, CH_NAMES[s.ch], x, y - 4, 44, "#fff", "center", 800);
+  text(g, CH_LINE[s.ch] || "", x, y + 42, 22, "#d8d8d8", "center", 500);
+  g.restore();
+}
+
 // --- controls ---------------------------------------------------------------------------------------------
 const chapters = [...new Set(SCENES.map((s) => s.ch))];
-const CH_NAMES = { 1: "Voor het spelen", 2: "Plaats nemen", 3: "Tekenen", 4: "Klaar", 5: "Intro", 6: "Spel", 7: "Einde", 8: "Uitzondering" };
-$("hoofdstukken").innerHTML = chapters.map((c) => `<button data-ch="${c}" title="${CH_NAMES[c]}">${c === 8 ? "U" : c}<span>${CH_NAMES[c]}</span></button>`).join("");
+const CH_NAMES = { 0: "Concept", 1: "Voor het spelen", 2: "Plaats nemen", 3: "Tekenen", 4: "Klaar", 5: "Intro", 6: "Spel", 7: "Einde", 8: "Uitzondering" };
+$("hoofdstukken").innerHTML = chapters.map((c) => `<button data-ch="${c}" title="${CH_NAMES[c]}">${c === 8 ? "U" : c === 0 ? "★" : c}<span>${CH_NAMES[c]}</span></button>`).join("");
 document.querySelectorAll("#hoofdstukken button").forEach((b) => (b.onclick = () => goChapter(+b.dataset.ch)));
 function goChapter(c) {
   const sc = SCENES.find((s) => s.ch === c);
@@ -158,7 +198,7 @@ $("traag").onclick = () => (P.speed = P.speed === 1 ? 0.5 : 1);
 const bar = $("tijdlijn");
 bar.oninput = () => { P.extra = null; P.T = (bar.value / 1000) * TOTAL; };
 // markers on the timeline
-$("markers").innerHTML = MAIN.map((s, i) => (i && MAIN[i - 1].ch === s.ch ? "" : `<i style="left:${(startOf(s) / TOTAL) * 100}%">${s.ch}</i>`)).join("");
+$("markers").innerHTML = MAIN.map((s, i) => (i && MAIN[i - 1].ch === s.ch ? "" : `<i style="left:${(startOf(s) / TOTAL) * 100}%">${s.ch || "★"}</i>`)).join("");
 // zoom in on a device: click it (or Z to cycle); click again to go back to the room
 canvas.addEventListener("click", (e) => {
   const x = (e.clientX - VIEW.ox) / VIEW.sc, y = (e.clientY - VIEW.oy) / VIEW.sc;
@@ -175,10 +215,10 @@ addEventListener("keydown", (e) => {
   else if (k === "arrowleft") step(-1);
   else if (k === "d") $("duo").click();
   else if (k === "h") { P.ui = !P.ui; document.body.classList.toggle("schoon", !P.ui); }
-  else if (/^[1-8]$/.test(k) && chapters.includes(+k)) goChapter(+k);
+  else if (/^[0-8]$/.test(k) && chapters.includes(+k)) goChapter(+k);
 });
 function ui(s, t) {
-  $("titel").textContent = `${s.ch === 8 ? "Uitzondering" : s.ch} · ${s.title}`;
+  $("titel").textContent = s.ch === 0 ? s.title : `${s.ch === 8 ? "Uitzondering" : s.ch} · ${s.title}`;
   $("uitleg").textContent = s.sub;
   $("speel").textContent = P.playing ? "❚❚" : "▶";
   $("duo").textContent = P.duo ? "Duo" : "Solo";
