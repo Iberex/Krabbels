@@ -86,8 +86,8 @@
     "end": "2026-11-15",
     "prio": "Basis",
     "dep": "Materiaal uitlenen op school",
-    "note": "Grootste risico. Lukt brug, helling, ladder? En met 2 personen?",
-    "status": "In works",
+    "note": "Lukt: brug, helling, ladder, springen, bukken, ook met 2 personen (testdemo)",
+    "status": "Done",
     "wie": "Ibe"
   },
   {
@@ -112,21 +112,21 @@
     "end": "2026-11-16",
     "prio": "Basis",
     "dep": "Tech-test: gebaren herkennen met webcam (MediaPipe)",
-    "note": "Browser of Unity? Hangt af van de twee tech-tests",
-    "status": "Not started",
+    "note": "Browser: MediaPipe + canvas, gekozen na de tech-test",
+    "status": "Done",
     "wie": ""
   },
   {
     "id": "puntje-en-krabbel-uittekenen-stijl-houdingen",
-    "t": "Puntje en Krabbel uittekenen (stijl, houdingen)",
+    "t": "Puntje uittekenen (stijl, houdingen)",
     "type": "Taak",
     "ond": "Design",
     "start": "2026-11-11",
     "end": "2026-11-17",
     "prio": "Basis",
     "dep": "",
-    "note": "",
-    "status": "Not started",
+    "note": "Krabbel tekent het kind zelf. Houdingen, emoties en storyboard staan als wireframe in Figma",
+    "status": "In works",
     "wie": ""
   },
   {
@@ -177,8 +177,8 @@
     "end": "2026-11-18",
     "prio": "Basis",
     "dep": "Tech-test: gebaren herkennen met webcam (MediaPipe)",
-    "note": "'Toon waar je staat': iets dat beweegt",
-    "status": "Not started",
+    "note": "Testdemo werkt (vaste plek, bewegende pictogrammen). Nog: tekenen op de iPad en eindscherm",
+    "status": "In works",
     "wie": ""
   },
   {
@@ -229,8 +229,8 @@
     "end": "2026-11-22",
     "prio": "Basis",
     "dep": "Techstack kiezen",
-    "note": "Eerste speelbare stuk",
-    "status": "Not started",
+    "note": "In de testdemo",
+    "status": "Done",
     "wie": ""
   },
   {
@@ -294,8 +294,8 @@
     "end": "2026-11-27",
     "prio": "Basis",
     "dep": "Game: Krabbel loopt, valt in een gat, armen opzij maakt een brug",
-    "note": "",
-    "status": "Not started",
+    "note": "In de testdemo, samen met springen en bukken",
+    "status": "Done",
     "wie": ""
   },
   {
@@ -316,11 +316,11 @@
     "t": "iPad-app: tekenen en versturen",
     "type": "Taak",
     "ond": "Development",
-    "start": "2026-11-23",
-    "end": "2026-11-28",
+    "start": "2026-11-16",
+    "end": "2026-11-19",
     "prio": "Basis",
     "dep": "iPad-schermen uitwerken zonder tekst",
-    "note": "Met de vinger, geen pen",
+    "note": "Met de vinger, geen pen. Voor de pitch een eenvoudige versie (tekenen, oogjes, klaar)",
     "status": "Not started",
     "wie": ""
   },
@@ -372,8 +372,8 @@
     "end": "2026-12-01",
     "prio": "Extra",
     "dep": "Game: helling en ladder",
-    "note": "Als het niet lukt voor de test: na de test",
-    "status": "Not started",
+    "note": "Duo in de testdemo, samen-bruggen hand in hand",
+    "status": "Done",
     "wie": ""
   },
   {
@@ -463,7 +463,7 @@
     "end": "2026-12-04",
     "prio": "Basis",
     "dep": "Testmoment op campus + indienen",
-    "note": "Nog bevestigen met Laura. Ook testen: welk einde werkt (Gommaar, boek gaat dicht, niets)",
+    "note": "Nog bevestigen met Laura. Ook testen: welk einde werkt",
     "status": "Not started",
     "wie": ""
   },
@@ -709,7 +709,7 @@
     "start": "2026-11-10",
     "end": "2026-11-15",
     "wie": "Senne",
-    "status": "In works",
+    "status": "Done",
     "prio": "Basis",
     "dep": "",
     "note": "Voorbereiden van testmoment 1 op Chiro Hemo Opstal."
@@ -718,7 +718,7 @@
     "id": "start-opbouw-constructie-fjcx",
     "t": "Start opbouw constructie",
     "type": "Taak",
-    "ond": "",
+    "ond": "Bouw",
     "start": "2026-11-10",
     "end": "2026-11-13",
     "wie": "Senne",
@@ -726,5 +726,96 @@
     "prio": "Basis",
     "dep": "",
     "note": ""
+  },
+  {
+    "id": "testdag-15-11",
+    "t": "Testdag met kinderen 15/11",
+    "type": "Taak",
+    "ond": "Testen",
+    "start": "2026-11-15",
+    "end": "2026-11-15",
+    "prio": "Basis",
+    "dep": "",
+    "note": "Opnames uitgeschreven, invulbladen en resultaten in Figma (Testing)",
+    "status": "Done",
+    "wie": ""
+  },
+  {
+    "id": "analyse-testdag",
+    "t": "Analyse testdag uitwerken",
+    "type": "Taak",
+    "ond": "Experience Design",
+    "start": "2026-11-16",
+    "end": "2026-11-19",
+    "prio": "Basis",
+    "dep": "",
+    "note": "Resultatenbord in Figma, wat we in de demo veranderden. Grootste probleem: opzij gaan (8 van de 13 groepjes)",
+    "status": "In works",
+    "wie": ""
+  },
+  {
+    "id": "demo-aanpassingen-test",
+    "t": "Demo: aanpassingen uit de test",
+    "type": "Taak",
+    "ond": "Development",
+    "start": "2026-11-16",
+    "end": "2026-11-19",
+    "prio": "Basis",
+    "dep": "",
+    "note": "Klaar: vaste plek met voetjes, pictogrammen met de rig-poses. Nog: ladderhint",
+    "status": "In works",
+    "wie": ""
+  },
+  {
+    "id": "demo-start-eindscherm",
+    "t": "Demo: start- en eindscherm",
+    "type": "Taak",
+    "ond": "Development",
+    "start": "2026-11-18",
+    "end": "2026-11-19",
+    "prio": "Basis",
+    "dep": "",
+    "note": "Eindscherm met tijd of score, Krabbel juicht, nog eens",
+    "status": "Not started",
+    "wie": ""
+  },
+  {
+    "id": "stijlrichting-opties",
+    "t": "Stijlrichting: 2 à 3 opties met stijlborden",
+    "type": "Taak",
+    "ond": "Design",
+    "start": "2026-11-16",
+    "end": "2026-11-19",
+    "prio": "Basis",
+    "dep": "",
+    "note": "Kleuren, letter, Puntje, elementen, UI. Laura laten kiezen",
+    "status": "In works",
+    "wie": ""
+  },
+  {
+    "id": "ux-schermen-verhaal",
+    "t": "UX: alle schermen, verhaal en pictogrammen",
+    "type": "Taak",
+    "ond": "Experience Design",
+    "start": "2026-11-16",
+    "end": "2026-11-19",
+    "prio": "Basis",
+    "dep": "",
+    "note": "Verhaaltekst, wireframes Puntje, storyboard en pictogrammen (met rig) staan in Figma",
+    "status": "In works",
+    "wie": "Senne"
+  },
+  {
+    "id": "opstelling-schema-handleiding",
+    "t": "Opstelling: schema, handleiding en materiaallijst",
+    "type": "Taak",
+    "ond": "Bouw",
+    "start": "2026-11-16",
+    "end": "2026-11-19",
+    "prio": "Basis",
+    "dep": "",
+    "note": "Materiaallijst in de production sheet van JEF",
+    "status": "In works",
+    "wie": ""
   }
 ]
