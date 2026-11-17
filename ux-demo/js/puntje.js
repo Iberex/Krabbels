@@ -84,7 +84,8 @@ function arm(g, sx, sy, side, a, e, open) {
 }
 
 // Draw Puntje with pose p, the ground under him at (x, y), scale s.
-export function drawPuntje(g, p, x, y, s = 1, { flip = false, ground = true } = {}) {
+export function drawPuntje(g, p, x, y, s = 1, { flip = false, ground = true, colors = null } = {}) {
+  const COL = { body: PAPER, cap: PAPER, cone: PAPER, ...(colors || {}) };
   g.save();
   g.translate(x + p.x * s, y);
   g.scale(flip ? -s : s, s);
@@ -112,11 +113,12 @@ export function drawPuntje(g, p, x, y, s = 1, { flip = false, ground = true } = 
   g.translate(0, cy); g.rotate(lean); g.scale(sx, sy);
   // cone (point) + lead
   g.beginPath(); g.moveTo(-W / 2, junction); g.lineTo(0, junction + R.coneH); g.lineTo(W / 2, junction); g.closePath();
-  g.fillStyle = PAPER; g.fill(); g.stroke();
+  g.fillStyle = COL.cone; g.fill(); g.stroke();
   g.beginPath(); g.moveTo(-5, junction + R.coneH - 8); g.lineTo(0, junction + R.coneH); g.lineTo(5, junction + R.coneH - 8); g.closePath(); g.fillStyle = INK; g.fill(); g.stroke();
   // body + cap
-  g.fillStyle = PAPER;
+  g.fillStyle = COL.body;
   g.beginPath(); g.rect(-W / 2, bodyTop, W, R.bodyH); g.fill(); g.stroke();
+  g.fillStyle = COL.cap;
   g.beginPath(); g.rect(-W / 2, bodyTop - R.capH, W, R.capH); g.fill(); g.stroke();
   g.restore();
 
