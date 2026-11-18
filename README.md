@@ -2,6 +2,8 @@
 
 A Phaser 3 demo (Vite + plain JavaScript) that plays every animation of **Puntje**, the pencil character, from PNG sequences rendered in After Effects. There is one button per animation.
 
+**Live demo:** https://iberex.github.io/puntje-demo/
+
 ## Quick start
 
 ```bash
@@ -106,3 +108,7 @@ All frames are loaded up front as separate textures, about 1.7 GB of GPU memory 
 ## Dev server note
 
 `vite.config.js` serves `assets/puntje/*` straight from disk. Without this, Vite's cached list of public files can answer newly rendered frames with `index.html`.
+
+## Deploy
+
+Every push to `main` builds with Vite and publishes to GitHub Pages (`.github/workflows/deploy.yml`). After new renders: `npm run scan`, commit `public/assets/puntje/`, push.
