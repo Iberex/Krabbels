@@ -1,0 +1,22 @@
+{
+  "name": "puntje-demo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "scan": "node scripts/scan.js",
+    "dev": "npm run scan && vite",
+    "build": "npm run scan && vite build",
+    "preview": "vite preview",
+    "ws-test": "node scripts/ws-test.js",
+    "render": "node scripts/render-ae.js"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5",
+    "vite": "^6.3.5",
+    "ws": "^8.18.2"
+  }
+}
