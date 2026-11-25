@@ -7,7 +7,7 @@
 // moves is drawn every frame. Game logic stays in main.js.
 // =====================================================================
 import { pictoShapes } from "./picto.js";
-import { drawWobbelKrabbel, waitLines } from "./hub.js";
+import { drawWobbelKrabbel, waitLines, SIZE as KRABBEL_SIZE } from "./hub.js";
 
 const img = (src) => {
   const i = new Image();
@@ -853,7 +853,8 @@ function drawKrabbel() {
 function puntjeTarget(t) {
   const k = S.k, kx = A.px(k.x), kg = A.levelY(k.y);
   const hop = Math.abs(Math.sin(t * 6)) * 16 * u;
-  let T = { x: kx + 80 * u, y: kg - 6 * u - hop, ang: 0, pose: "wave", squash: 1 };
+  // Puntje stands in front of the Krabbel; a bigger Krabbel (SIZE in hub.js) pushes it further away.
+  let T = { x: kx + 80 * u * Math.max(1, KRABBEL_SIZE / 1.25), y: kg - 6 * u - hop, ang: 0, pose: "wave", squash: 1 };
   const page = S.slideT >= 1 ? Math.round(S.camX) : S.slideTo;
   const o = A.nextObstacle();
   if (!o || S.phase === "countdown" || S.phase === "ready") return T;

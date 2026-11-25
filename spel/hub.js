@@ -17,7 +17,7 @@
 export const HUB = (new URLSearchParams(location.search).get("hub") || "http://localhost:3000").replace(/\/+$/, "");
 
 // Size of the wobbel compared with the old placeholder Krabbel (1 = same height as the body + legs).
-const SIZE = 1.25;
+export const SIZE = 2.6;
 
 export const hub = {
   connected: false,
@@ -32,6 +32,10 @@ export const hub = {
 };
 
 const finished = new Set(); // ids sent to /world, maybe not yet processed by the hub
+// Drawings that were already waiting when the game (re)loaded: skipped. After a refresh the game waits
+// for a new START, it never grabs an old drawing. null = first poll not done yet.
+let skipped = null;
+const fresh = (w) => !finished.has(w.id) && skipped !== null && !skipped.has(w.id);
 
 // ---------------------------------------------------------------------
 // Drawing code from the hub
@@ -74,7 +78,7 @@ const startOf = (x) => Date.parse(x.startedAt || x.createdAt) || 0;
 
 // Who is still drawing (not yet in the queue).
 function stillDrawing() {
-  const sent = new Set(hub.queue.map((w) => w.clientId).filter(Boolean));
+  const sent = new Set(hub.queue.map((w) => w.clientId).filter(Boolean)); // includes skipped ones: they are not "drawing"
   return hub.drawing.filter((d) => !sent.has(d.clientId));
 }
 
@@ -83,7 +87,7 @@ function stillDrawing() {
 // An iPad that goes quiet (20 s) or throws its drawing away drops out of hub.drawing by itself.
 function pick() {
   if (hub.locked) return;
-  const ready = hub.queue.filter((w) => !finished.has(w.id));
+  const ready = hub.queue.filter(fresh);
   const busy = stillDrawing().length > 0;
   hub.current = busy ? null : ready[0] || null;
   hub.partner = busy ? null : ready[1] || null;
@@ -100,6 +104,7 @@ async function poll() {
     if (hub.epoch && data.epoch !== hub.epoch) {
       // Reset on /admin (or a new day): forget everything.
       finished.clear();
+      skipped = new Set();
       hub.queue = [];
       const wasLocked = hub.locked;
       hub.locked = false;
@@ -110,11 +115,12 @@ async function poll() {
     hub.epoch = data.epoch;
     hub.queue = (data.wobbels || []).slice().sort((a, b) => startOf(a) - startOf(b) || a.seq - b.seq);
     hub.drawing = Array.isArray(data.drawing) ? data.drawing : [];
+    if (skipped === null) skipped = new Set(hub.queue.map((w) => w.id));
     // Ids that the hub no longer lists as "game" are really done.
     for (const id of finished) if (!hub.queue.some((w) => w.id === id)) finished.delete(id);
     pick();
     hub.connected = true;
-    const waiting = hub.queue.filter((w) => !finished.has(w.id)).length;
+    const waiting = hub.queue.filter(fresh).length;
     const busy = stillDrawing().length;
     hub.text = [
       waiting ? `${waiting} Krabbel${waiting === 1 ? "" : "s"} klaar` : "",
@@ -138,7 +144,7 @@ async function poll() {
 // Text for the wait screen of the game: [big line, small line].
 export function waitLines() {
   if (!hub.connected) return ["Even geduld...", "Het spel zoekt de iPad-hub"];
-  const ready = hub.queue.filter((w) => !finished.has(w.id)).length;
+  const ready = hub.queue.filter(fresh).length;
   const busy = stillDrawing().length;
   if (busy && ready) {
     return [
@@ -211,7 +217,7 @@ export function drawWobbelKrabbel(ctx, k, x, ground, height, walking, timeMs) {
   const Wobbel = window.Wobbel;
   if (!hub.current || !scriptsReady || !Wobbel) return false;
   // Duo: the second Krabbel walks just behind the first one and does the same moves.
-  if (hub.partner) drawOne(Wobbel, hub.partner, ctx, k, x - height * 0.8, ground, height, walking, timeMs);
+  if (hub.partner) drawOne(Wobbel, hub.partner, ctx, k, x - height * SIZE * 0.75, ground, height, walking, timeMs);
   return drawOne(Wobbel, hub.current, ctx, k, x, ground, height, walking, timeMs);
 }
 
