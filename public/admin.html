@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wobbel: beheer</title>
+    <link rel="stylesheet" href="/shared/base.css" />
+    <style>
+      html,
+      body {
+        overflow: auto;
+        touch-action: auto;
+      }
+      main {
+        padding: 24px;
+        font-size: 18px;
+        line-height: 1.6;
+      }
+      a {
+        color: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Wobbel beheer</h1>
+      <p id="info">Laden...</p>
+      <p><button id="reset">Wis alle wobbels van vandaag</button></p>
+      <p id="result"></p>
+      <p>
+        Pagina's: <a href="/draw">/draw</a> (iPad) · <a href="/level">/level</a> (beamer) ·
+        <a href="/world">/world</a> (tweede scherm)
+      </p>
+    </main>
+    <script src="/shared/api.js"></script>
+    <script>
+      const info = document.getElementById('info');
+      const result = document.getElementById('result');
+      const resetButton = document.getElementById('reset');
+      let armed = false;
+      let armTimer = null;
+
+      async function refresh() {
+        const data = await Api.get('/api/health');
+        info.textContent = `Dag ${data.day}: ${data.level} wobbel(s) in het level, ${data.world} in de wereld.`;
+      }
+
+      // Two taps are needed, so the data is not removed by accident.
+      resetButton.addEventListener('click', async () => {
+        if (!armed) {
+          armed = true;
+          resetButton.textContent = 'Tik nog eens om ALLE wobbels van vandaag te wissen';
+          armTimer = setTimeout(disarm, 4000);
+          return;
+        }
+        clearTimeout(armTimer);
+        disarm();
+        try {
+          await Api.post('/admin/reset');
+          result.textContent = 'Gewist. De schermen maken zichzelf leeg binnen een seconde.';
+          refresh();
+        } catch (error) {
+          result.textContent = 'Wissen mislukt. Draait de server?';
+        }
+      });
+
+      function disarm() {
+        armed = false;
+        resetButton.textContent = 'Wis alle wobbels van vandaag';
+      }
+
+      Api.poll(refresh, 2000);
+    </script>
+  </body>
+</html>
