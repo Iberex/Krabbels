@@ -305,6 +305,13 @@ function surfaceAt(x) {
 // Starting / ending a round
 // ---------------------------------------------------------------------
 function startGame(modeKey) {
+  // Only play with a drawing from the iPad: no waiting Krabbel (or its drawing code not loaded yet) = no round.
+  // Calibration does not need a Krabbel.
+  if (modeKey !== "kalibratie" && !(hub.current && window.Wobbel)) {
+    S.noKrabbelUntil = performance.now() + 3000;
+    if (S.screen === "game") goMenu();
+    return;
+  }
   S.mode = MODES[modeKey];
   S.screen = "game";
   S.phase = S.mode.key === "kalibratie" ? "play" : "ready";
@@ -1680,6 +1687,10 @@ setInterval(() => {
   const auto = !AUTO.on ? "" : AUTO.paused ? " · automatisch: PAUZE (A = aan)" : " · automatisch: aan";
   el.textContent = `iPad-hub: ${hub.text}${who && hub.connected ? ` · ${who}` : ""}${auto}`;
   el.classList.toggle("off", !hub.connected);
+  if (performance.now() < (S.noKrabbelUntil || 0)) {
+    el.textContent = "Nog geen tekening: teken eerst een Krabbel op de iPad";
+    el.classList.add("off");
+  }
 }, 500);
 
 // Automatic play: a Krabbel from the iPad is waiting -> the round starts by itself.
@@ -1705,7 +1716,7 @@ setInterval(() => {
     return;
   }
   AUTO.doneSince = null;
-  if (!AUTO.paused && S.screen === "menu" && hub.connected && hub.current && !hub.locked) startGame(AUTO.mode);
+  if (!AUTO.paused && S.screen === "menu" && hub.connected && hub.current && window.Wobbel && !hub.locked) startGame(AUTO.mode);
 }, 250);
 window.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT") return;
