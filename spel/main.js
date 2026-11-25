@@ -15,7 +15,7 @@ import { USE_FEMTO, CAMERA_BEHIND, ZONE, femto, startFemto, wantImage, calibrate
 import { pictoShapes } from "./picto.js";
 import { SvgCtx } from "./svgctx.js";
 import { drawStyled } from "./stijl.js";
-import { hub, lock, unlock, finishCurrent, drawWobbelKrabbel, waitLines } from "./hub.js";
+import { hub, lock, unlock, finishCurrent, dropPartner, drawWobbelKrabbel, waitLines } from "./hub.js";
 
 // ---------------------------------------------------------------------
 // Settings
@@ -309,7 +309,7 @@ function startGame(modeKey) {
   S.screen = "game";
   // Only play with a drawing from the iPad: without one the game waits IN the game ("wait"),
   // and goes on to "ready" (stand in front of the camera) as soon as a drawing arrives.
-  S.phase = S.mode.key === "kalibratie" ? "play" : krabbelReady() ? "ready" : "wait";
+  S.phase = S.mode.key === "kalibratie" ? "play" : "wait";
   S.phaseT = 0;
   S.runTime = 0;
   S.cleared = 0;
@@ -323,8 +323,23 @@ function startGame(modeKey) {
   S.speed = S.mode.speed || 0;
   tracker.reset();
   if (S.mode.key === "kalibratie") unlock();
-  else if (S.phase === "ready") lock(); // the oldest waiting wobbel from the iPad is the Krabbel of this round
+  else if (krabbelReady()) beginReady();
   showPanel(null);
+}
+
+// The drawing(s) are here: fix them for this round, then "stand in front of the camera".
+// Automatic: 2 drawings = the children play together (duo), 1 = solo. Manual (?auto=0): the menu choice.
+function beginReady() {
+  lock();
+  if (AUTO.on) {
+    const duo = Boolean(hub.partner);
+    if (duo !== S.duo) {
+      S.duo = duo;
+      S.pages = buildCourse(S.mode, S.duo);
+    }
+  } else if (!S.duo) dropPartner();
+  S.phase = "ready";
+  S.phaseT = 0;
 }
 
 // A drawing from the iPad is waiting and the drawing code (from the hub) is loaded.
@@ -706,11 +721,7 @@ function update(dt) {
   if (S.mode.key === "kalibratie") return;
 
   if (S.phase === "wait") {
-    if (krabbelReady()) {
-      lock();
-      S.phase = "ready";
-      S.phaseT = 0;
-    }
+    if (krabbelReady()) beginReady();
   } else if (S.phase === "ready") {
     const need = S.duo ? 2 : 1;
     if (presentCount() >= need) {

@@ -24,8 +24,8 @@ export const hub = {
   text: "verbinden met de hub...",
   queue: [], // wobbels with status "game", in START order
   drawing: [], // iPads where START was tapped and the drawing is not sent yet: [{ clientId, startedAt }]
-  waitingForEarlier: false, // a drawing is ready, but an iPad that tapped START earlier is still drawing
   current: null, // the wobbel that is (or will be) the Krabbel
+  partner: null, // second drawing: the two children play together (duo), both Krabbels walk
   locked: false,
   epoch: null,
   onReset: null, // set by the game: called when /admin resets during a round
@@ -78,16 +78,15 @@ function stillDrawing() {
   return hub.drawing.filter((d) => !sent.has(d.clientId));
 }
 
+// While anyone is still drawing, nothing starts: the children who tapped START play together.
+// Nobody drawing: the 2 oldest drawings (START order) play together, 1 drawing plays alone.
+// An iPad that goes quiet (20 s) or throws its drawing away drops out of hub.drawing by itself.
 function pick() {
   if (hub.locked) return;
-  const first = hub.queue.find((w) => !finished.has(w.id)) || null;
-  // The iPad that tapped START first plays first: wait for it, even if another drawing is already here.
-  hub.waitingForEarlier = Boolean(first && stillDrawing().some((d) => startOf(d) < startOf(first)));
-  const next = hub.waitingForEarlier ? null : first;
-  if ((next && next.id) !== (hub.current && hub.current.id)) {
-    hub.current = next;
-    look = null;
-  }
+  const ready = hub.queue.filter((w) => !finished.has(w.id));
+  const busy = stillDrawing().length > 0;
+  hub.current = busy ? null : ready[0] || null;
+  hub.partner = busy ? null : ready[1] || null;
 }
 
 async function poll() {
@@ -105,7 +104,7 @@ async function poll() {
       const wasLocked = hub.locked;
       hub.locked = false;
       hub.current = null;
-      look = null;
+      hub.partner = null;
       if (wasLocked && hub.onReset) hub.onReset();
     }
     hub.epoch = data.epoch;
@@ -138,13 +137,17 @@ async function poll() {
 
 // Text for the wait screen of the game: [big line, small line].
 export function waitLines() {
-  const busy = stillDrawing().length;
   if (!hub.connected) return ["Even geduld...", "Het spel zoekt de iPad-hub"];
-  if (hub.waitingForEarlier) {
-    return ["Je Krabbel wordt getekend...", "Wie eerst op START drukte, speelt eerst"];
+  const ready = hub.queue.filter((w) => !finished.has(w.id)).length;
+  const busy = stillDrawing().length;
+  if (busy && ready) {
+    return [
+      ready === 1 ? "Eén Krabbel is klaar" : `${ready} Krabbels zijn klaar`,
+      busy === 1 ? "Wachten op de andere tekening... dan spelen jullie samen" : `Wachten op ${busy} tekeningen... dan spelen jullie samen`,
+    ];
   }
   if (busy === 1) return ["Je Krabbel wordt getekend...", "Het spel begint als je tekening klaar is"];
-  if (busy > 1) return [`${busy} Krabbels worden getekend...`, "Wie eerst op START drukte, speelt eerst"];
+  if (busy > 1) return [`${busy} Krabbels worden getekend...`, "Als iedereen klaar is, spelen jullie samen"];
   return ["Druk op START op de iPad", "en teken je Krabbel"];
 }
 
@@ -163,15 +166,20 @@ export function unlock() {
 
 // End of a round (finished, failed or time up): the Krabbel goes to /world.
 export function finishCurrent() {
-  const w = hub.locked ? hub.current : null;
+  const done = hub.locked ? [hub.current, hub.partner].filter(Boolean) : [];
   hub.locked = false;
-  if (w) {
+  for (const w of done) {
     finished.add(w.id);
     sendToWorld(w.id);
   }
   hub.current = null;
-  look = null;
+  hub.partner = null;
   pick();
+}
+
+// Solo round while a second drawing is there (manual solo, ?auto=0): the second one waits in the queue.
+export function dropPartner() {
+  hub.partner = null;
 }
 
 async function sendToWorld(id) {
@@ -197,16 +205,24 @@ async function sendToWorld(id) {
 //   walking true while it walks
 // Returns false when there is no wobbel (yet): then the game draws the placeholder.
 // ---------------------------------------------------------------------
-let look = null; // per-wobbel cache: bounds, sprite, gait, eye animation, walk phase
+const looks = new Map(); // per wobbel id: bounds, sprite, gait, eye animation, walk phase
 
 export function drawWobbelKrabbel(ctx, k, x, ground, height, walking, timeMs) {
-  const w = hub.current;
   const Wobbel = window.Wobbel;
-  if (!w || !scriptsReady || !Wobbel) return false;
+  if (!hub.current || !scriptsReady || !Wobbel) return false;
+  // Duo: the second Krabbel walks just behind the first one and does the same moves.
+  if (hub.partner) drawOne(Wobbel, hub.partner, ctx, k, x - height * 0.8, ground, height, walking, timeMs);
+  return drawOne(Wobbel, hub.current, ctx, k, x, ground, height, walking, timeMs);
+}
+
+function drawOne(Wobbel, w, ctx, k, x, ground, height, walking, timeMs) {
   try {
-    if (!look || look.id !== w.id) {
+    let look = looks.get(w.id);
+    if (!look) {
+      if (looks.size > 20) looks.clear();
       const bounds = Wobbel.boundsOf(w);
       look = { id: w.id, bounds, gait: Wobbel.gaitOf(w), anim: Wobbel.makeAnim(), phase: 0, t: timeMs, sprite: null, spriteR: 0 };
+      looks.set(w.id, look);
     }
     const dt = Math.min(0.1, Math.max(0, (timeMs - look.t) / 1000));
     look.t = timeMs;
