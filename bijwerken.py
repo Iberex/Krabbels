@@ -16,6 +16,7 @@ PARTS = {
     "testdemo": "5-demos/Testdemo",
     "demo-stijl": "5-demos/Demo-v2",
     "ux-demo": "5-demos/UX-demo",
+    "wereld": "5-demos/Wereld",
 }
 SKIP = shutil.ignore_patterns(".git", ".DS_Store", "v2", "*.zip", ".claude")
 
