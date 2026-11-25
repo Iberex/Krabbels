@@ -799,6 +799,7 @@ function drawKrabbel() {
   const step = walking ? Math.sin(k.anim * 14) : 0;
   const sy = duck ? 0.72 : 1;
   const cy = ground - (duck ? 34 : 55) * u;
+  if (S.phase === "wait") return; // no drawing yet: no Krabbel (never the placeholder)
   ctx.save();
   if (k.state === "bonk") ctx.translate(Math.sin(S.phaseT * 40) * 3 * Math.max(0, 1 - S.phaseT), 0);
   // The wobbel from the iPad, if there is one. Otherwise the placeholder below.
@@ -1133,6 +1134,12 @@ function drawProgress() {
   }
 }
 
+function drawWait() {
+  ctx.fillStyle = "rgba(243,238,227,0.78)";
+  ctx.fillRect(0, 0, W, H);
+  hudText("Teken je Krabbel op de iPad", W / 2, H * 0.42, H * 0.06, C.ink, "center", 900);
+  hudText("Het spel begint als je tekening er is", W / 2, H * 0.51, H * 0.03, "#8A7F70", "center", 600);
+}
 function drawReady() {
   ctx.fillStyle = "rgba(243,238,227,0.78)";
   ctx.fillRect(0, 0, W, H);
@@ -1363,6 +1370,7 @@ export function drawStyled(api) {
   drawPlayerLabels();
   drawGrain();
   drawHud();
+  if (S.phase === "wait") drawWait();
   if (S.phase === "ready") drawReady();
   if (S.phase === "intro") drawIntro();
   if (S.phase === "countdown") drawCountdown();

@@ -157,7 +157,7 @@ const S = {
   introOn: store.get("krabbels-v2-intro", true), // three explanation cards before the countdown
   style: store.get("krabbels-v2-style", true), // draw in the style (true) or grey (false) // scoreboard shown or not (A/B test)
   duo: false,
-  phase: "ready", // ready | countdown | play | fail | done
+  phase: "ready", // wait (no drawing yet) | ready | intro | countdown | play | fail | done
   phaseT: 0,
   runTime: 0, // seconds of play
   cleared: 0,
@@ -305,16 +305,11 @@ function surfaceAt(x) {
 // Starting / ending a round
 // ---------------------------------------------------------------------
 function startGame(modeKey) {
-  // Only play with a drawing from the iPad: no waiting Krabbel (or its drawing code not loaded yet) = no round.
-  // Calibration does not need a Krabbel.
-  if (modeKey !== "kalibratie" && !(hub.current && window.Wobbel)) {
-    S.noKrabbelUntil = performance.now() + 3000;
-    if (S.screen === "game") goMenu();
-    return;
-  }
   S.mode = MODES[modeKey];
   S.screen = "game";
-  S.phase = S.mode.key === "kalibratie" ? "play" : "ready";
+  // Only play with a drawing from the iPad: without one the game waits IN the game ("wait"),
+  // and goes on to "ready" (stand in front of the camera) as soon as a drawing arrives.
+  S.phase = S.mode.key === "kalibratie" ? "play" : krabbelReady() ? "ready" : "wait";
   S.phaseT = 0;
   S.runTime = 0;
   S.cleared = 0;
@@ -328,8 +323,13 @@ function startGame(modeKey) {
   S.speed = S.mode.speed || 0;
   tracker.reset();
   if (S.mode.key === "kalibratie") unlock();
-  else lock(); // the oldest waiting wobbel from the iPad is the Krabbel of this round
+  else if (S.phase === "ready") lock(); // the oldest waiting wobbel from the iPad is the Krabbel of this round
   showPanel(null);
+}
+
+// A drawing from the iPad is waiting and the drawing code (from the hub) is loaded.
+function krabbelReady() {
+  return Boolean(hub.current && window.Wobbel);
 }
 
 function endRound(kind) {
@@ -705,7 +705,13 @@ function update(dt) {
 
   if (S.mode.key === "kalibratie") return;
 
-  if (S.phase === "ready") {
+  if (S.phase === "wait") {
+    if (krabbelReady()) {
+      lock();
+      S.phase = "ready";
+      S.phaseT = 0;
+    }
+  } else if (S.phase === "ready") {
     const need = S.duo ? 2 : 1;
     if (presentCount() >= need) {
       S.phase = S.introOn ? "intro" : "countdown";
@@ -796,6 +802,7 @@ function draw() {
   drawPrompts();
   drawEffects();
   drawHud();
+  if (S.phase === "wait") drawWait();
   if (S.phase === "ready") drawReady();
   if (S.phase === "intro") drawIntro();
   if (S.phase === "countdown") drawCountdown();
@@ -1010,6 +1017,7 @@ function drawKrabbel() {
   const cy = ground - legLen - bodyR;
   const walking = ["walk", "duck", "jump"].includes(k.state) && S.phase === "play";
   const step = walking ? Math.sin(k.anim * 14) : 0;
+  if (S.phase === "wait") return; // no drawing yet: no Krabbel (never the placeholder)
 
   ctx.save();
   if (k.state === "bonk") ctx.translate(Math.sin(S.phaseT * 40) * 3 * Math.max(0, 1 - S.phaseT), 0);
@@ -1266,6 +1274,13 @@ function drawHud() {
     }
   }
   if (!(ctx instanceof SvgCtx)) text("Esc = menu", W - pad, H - pad * 0.6, H * 0.018, "#aaa", "right", 500);
+}
+
+function drawWait() {
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
+  ctx.fillRect(0, 0, W, H);
+  text("Teken je Krabbel op de iPad", W / 2, H * 0.42, H * 0.05);
+  text("Het spel begint als je tekening er is", W / 2, H * 0.5, H * 0.025, C.mid);
 }
 
 function drawReady() {
@@ -1640,7 +1655,7 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (key === "escape") {
-    if (S.screen === "game" && S.phase !== "done") endRound("quit");
+    if (S.screen === "game" && S.phase !== "done" && S.phase !== "wait") endRound("quit");
     else goMenu();
   } else if (key === "f") {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
@@ -1678,7 +1693,7 @@ window.addEventListener("keyup", (e) => {
 // ---------------------------------------------------------------------
 // Reset on /admin during a round: stop the round, wait for a new Krabbel.
 hub.onReset = () => {
-  if (S.screen === "game" && S.phase !== "done") endRound("quit");
+  if (S.screen === "game" && S.phase !== "done" && S.phase !== "wait") endRound("quit");
 };
 setInterval(() => {
   const el = $("hub-status");
@@ -1687,15 +1702,12 @@ setInterval(() => {
   const auto = !AUTO.on ? "" : AUTO.paused ? " · automatisch: PAUZE (A = aan)" : " · automatisch: aan";
   el.textContent = `iPad-hub: ${hub.text}${who && hub.connected ? ` · ${who}` : ""}${auto}`;
   el.classList.toggle("off", !hub.connected);
-  if (performance.now() < (S.noKrabbelUntil || 0)) {
-    el.textContent = "Nog geen tekening: teken eerst een Krabbel op de iPad";
-    el.classList.add("off");
-  }
+
 }, 500);
 
-// Automatic play: a Krabbel from the iPad is waiting -> the round starts by itself.
-// The round then waits in "ready" until someone stands in front of the camera (presentCount).
-// End screen: after AUTO.endS seconds back to the menu, and the next waiting Krabbel starts.
+// Automatic play: the game opens in a round right away and waits there ("wait") for a drawing from the iPad.
+// Then it waits in "ready" until someone stands in front of the camera (presentCount).
+// End screen: after AUTO.endS seconds the next round starts (and waits for the next drawing).
 // Esc pauses this (calibration, stopping a round), A switches it on again, 1 / 2 too.
 //   ?auto=0        off (start with 1 / 2 like before)
 //   ?modus=score   automatic rounds in score mode (default: tijd)
@@ -1712,11 +1724,11 @@ setInterval(() => {
     const input = $("end-name-input");
     const typing = input && input.value.trim() && document.activeElement === input;
     if (AUTO.doneSince === null || typing) AUTO.doneSince = performance.now();
-    if (performance.now() - AUTO.doneSince >= AUTO.endS * 1000) goMenu();
+    if (performance.now() - AUTO.doneSince >= AUTO.endS * 1000) startGame(AUTO.mode);
     return;
   }
   AUTO.doneSince = null;
-  if (!AUTO.paused && S.screen === "menu" && hub.connected && hub.current && window.Wobbel && !hub.locked) startGame(AUTO.mode);
+  if (!AUTO.paused && S.screen === "menu") startGame(AUTO.mode);
 }, 250);
 window.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT") return;
