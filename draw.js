@@ -29,6 +29,7 @@
   const toolPanel = document.getElementById('tools');
   const idleBox = document.getElementById('idle');
   const hand = document.getElementById('hand');
+  const startButton = document.getElementById('start');
 
   // ---------- Settings ----------
   const COLORS = ['#000000', '#ffffff', '#9e9e9e', '#795548', '#e53935', '#fb8c00', '#fdd835', '#43a047', '#1e88e5', '#ec407a'];
@@ -129,6 +130,10 @@
   let mode = 'draw'; // 'draw' | 'sending' | 'flying' | 'sent'
   let flyStart = 0;
   let pending = null; // payload that is being sent
+  // START was tapped: this id goes to the game ("being drawn", place in line) and is the clientId of the drawing.
+  let sessionId = null;
+  let pingTimer = null;
+  const PING_MS = 5000; // "still drawing" every 5 s; the hub forgets an iPad after 20 s of silence
   let retryTimer = null;
   let color = COLORS[0]; // a hex colour, or RAINBOW
   let tool = 'pen'; // 'pen' | 'erase' | 'fill'
@@ -610,7 +615,7 @@
     mode = 'sending';
     // clientId: if the same wobbel is sent twice (retry), the server stores it only once.
     pending = {
-      clientId: 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10),
+      clientId: sessionId || newClientId(),
       strokes,
       stickers,
       fill,
@@ -631,6 +636,7 @@
     try {
       const wobbel = await Api.post('/api/wobbels', pending);
       Api.setConnected(true);
+      endSession(false); // the drawing arrived: the hub ends the session itself
       retryButton.hidden = true;
       pending = null;
       Hooks.onWobbelSent(wobbel);
@@ -672,8 +678,39 @@
     messageTimer = setTimeout(() => (messageBox.hidden = true), ms);
   }
 
+  // ---------- START and the place in line ----------
+  function newClientId() {
+    return 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+  }
+
+  // start / ping / cancel to the hub (or Supabase). Lost messages do not matter: the next ping repairs it.
+  function drawingEvent(kind) {
+    if (sessionId) Api.post('/api/drawing', { kind, clientId: sessionId }).catch(() => {});
+  }
+
+  startButton.addEventListener('click', () => {
+    Hooks.onTap();
+    sessionId = newClientId();
+    drawingEvent('start');
+    clearInterval(pingTimer);
+    pingTimer = setInterval(() => drawingEvent('ping'), PING_MS);
+    startButton.hidden = true;
+    lastInput = performance.now();
+    attract = false;
+  });
+
+  // cancel = the drawing is thrown away (bin, nobody there): the game stops waiting for it.
+  function endSession(cancel) {
+    clearInterval(pingTimer);
+    pingTimer = null;
+    if (cancel) drawingEvent('cancel');
+    sessionId = null;
+  }
+
   // Empty everything and go back to step 0, for the next child.
   function startOver() {
+    endSession(true);
+    startButton.hidden = false;
     strokes = [];
     stickers = [];
     fill = null;
@@ -880,7 +917,7 @@
         clearButton.style.setProperty('--p', p * 100);
         if (p >= 1) startOver();
       }
-      const somethingToLose = step > 0 || stickers.length > 0;
+      const somethingToLose = sessionId !== null || step > 0 || stickers.length > 0;
       if (idle > IDLE_WARN_MS && somethingToLose) {
         // Nobody touched the screen for a minute: first a countdown ring, then clear.
         const left = 1 - (idle - IDLE_WARN_MS) / IDLE_COUNTDOWN_MS;
@@ -892,7 +929,7 @@
           idleBox.style.setProperty('--left', left * 100);
           hideHand();
         }
-      } else if (idle > HINT_MS && hand.hidden && activePointer === null) {
+      } else if (idle > HINT_MS && hand.hidden && activePointer === null && startButton.hidden) {
         showHand();
       }
     }

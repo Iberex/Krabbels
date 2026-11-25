@@ -22,7 +22,9 @@ const SIZE = 1.25;
 export const hub = {
   connected: false,
   text: "verbinden met de hub...",
-  queue: [], // wobbels with status "game", oldest first
+  queue: [], // wobbels with status "game", in START order
+  drawing: [], // iPads where START was tapped and the drawing is not sent yet: [{ clientId, startedAt }]
+  waitingForEarlier: false, // a drawing is ready, but an iPad that tapped START earlier is still drawing
   current: null, // the wobbel that is (or will be) the Krabbel
   locked: false,
   epoch: null,
@@ -67,9 +69,21 @@ async function loadDrawingCode() {
 // ---------------------------------------------------------------------
 // Polling
 // ---------------------------------------------------------------------
+// Order = when START was tapped on the iPad (startedAt), or when the drawing arrived (older hub / no START).
+const startOf = (x) => Date.parse(x.startedAt || x.createdAt) || 0;
+
+// Who is still drawing (not yet in the queue).
+function stillDrawing() {
+  const sent = new Set(hub.queue.map((w) => w.clientId).filter(Boolean));
+  return hub.drawing.filter((d) => !sent.has(d.clientId));
+}
+
 function pick() {
   if (hub.locked) return;
-  const next = hub.queue.find((w) => !finished.has(w.id)) || null;
+  const first = hub.queue.find((w) => !finished.has(w.id)) || null;
+  // The iPad that tapped START first plays first: wait for it, even if another drawing is already here.
+  hub.waitingForEarlier = Boolean(first && stillDrawing().some((d) => startOf(d) < startOf(first)));
+  const next = hub.waitingForEarlier ? null : first;
   if ((next && next.id) !== (hub.current && hub.current.id)) {
     hub.current = next;
     look = null;
@@ -95,13 +109,18 @@ async function poll() {
       if (wasLocked && hub.onReset) hub.onReset();
     }
     hub.epoch = data.epoch;
-    hub.queue = (data.wobbels || []).slice().sort((a, b) => a.seq - b.seq);
+    hub.queue = (data.wobbels || []).slice().sort((a, b) => startOf(a) - startOf(b) || a.seq - b.seq);
+    hub.drawing = Array.isArray(data.drawing) ? data.drawing : [];
     // Ids that the hub no longer lists as "game" are really done.
     for (const id of finished) if (!hub.queue.some((w) => w.id === id)) finished.delete(id);
     pick();
     hub.connected = true;
     const waiting = hub.queue.filter((w) => !finished.has(w.id)).length;
-    hub.text = waiting ? `${waiting} Krabbel${waiting === 1 ? "" : "s"} klaar` : "Teken je Krabbel op de iPad";
+    const busy = stillDrawing().length;
+    hub.text = [
+      waiting ? `${waiting} Krabbel${waiting === 1 ? "" : "s"} klaar` : "",
+      busy ? `${busy} aan het tekenen` : "",
+    ].filter(Boolean).join(" · ") || "Druk op START op de iPad";
   } catch (_) {
     hub.connected = false;
     hub.text = `geen hub op ${HUB} (draait npm start?)`;
@@ -116,6 +135,18 @@ async function poll() {
     await new Promise((r) => setTimeout(r, 1000));
   }
 })();
+
+// Text for the wait screen of the game: [big line, small line].
+export function waitLines() {
+  const busy = stillDrawing().length;
+  if (!hub.connected) return ["Even geduld...", "Het spel zoekt de iPad-hub"];
+  if (hub.waitingForEarlier) {
+    return ["Je Krabbel wordt getekend...", "Wie eerst op START drukte, speelt eerst"];
+  }
+  if (busy === 1) return ["Je Krabbel wordt getekend...", "Het spel begint als je tekening klaar is"];
+  if (busy > 1) return [`${busy} Krabbels worden getekend...`, "Wie eerst op START drukte, speelt eerst"];
+  return ["Druk op START op de iPad", "en teken je Krabbel"];
+}
 
 // ---------------------------------------------------------------------
 // Rounds

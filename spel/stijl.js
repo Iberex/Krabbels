@@ -7,7 +7,7 @@
 // moves is drawn every frame. Game logic stays in main.js.
 // =====================================================================
 import { pictoShapes } from "./picto.js";
-import { drawWobbelKrabbel } from "./hub.js";
+import { drawWobbelKrabbel, waitLines } from "./hub.js";
 
 const img = (src) => {
   const i = new Image();
@@ -1137,8 +1137,9 @@ function drawProgress() {
 function drawWait() {
   ctx.fillStyle = "rgba(243,238,227,0.78)";
   ctx.fillRect(0, 0, W, H);
-  hudText("Teken je Krabbel op de iPad", W / 2, H * 0.42, H * 0.06, C.ink, "center", 900);
-  hudText("Het spel begint als je tekening er is", W / 2, H * 0.51, H * 0.03, "#8A7F70", "center", 600);
+  const [big, small] = waitLines();
+  hudText(big, W / 2, H * 0.42, H * 0.06, C.ink, "center", 900);
+  hudText(small, W / 2, H * 0.51, H * 0.03, "#8A7F70", "center", 600);
 }
 function drawReady() {
   ctx.fillStyle = "rgba(243,238,227,0.78)";

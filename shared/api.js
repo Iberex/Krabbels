@@ -77,6 +77,15 @@
         throw new Error('Not available in cloud mode: ' + url);
       },
       async post(url, body) {
+        if (url === '/api/drawing') {
+          // start / ping / cancel: a row without client_id (that column is only for finished drawings).
+          await request(base + '/rest/v1/krabbels', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }, headers),
+            body: JSON.stringify({ data: { kind: body.kind, clientId: body.clientId } }),
+          });
+          return { ok: true };
+        }
         if (url !== '/api/wobbels') throw new Error('Not available in cloud mode: ' + url);
         try {
           await request(base + '/rest/v1/krabbels', {

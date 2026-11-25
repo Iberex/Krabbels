@@ -15,7 +15,7 @@ import { USE_FEMTO, CAMERA_BEHIND, ZONE, femto, startFemto, wantImage, calibrate
 import { pictoShapes } from "./picto.js";
 import { SvgCtx } from "./svgctx.js";
 import { drawStyled } from "./stijl.js";
-import { hub, lock, unlock, finishCurrent, drawWobbelKrabbel } from "./hub.js";
+import { hub, lock, unlock, finishCurrent, drawWobbelKrabbel, waitLines } from "./hub.js";
 
 // ---------------------------------------------------------------------
 // Settings
@@ -1279,8 +1279,9 @@ function drawHud() {
 function drawWait() {
   ctx.fillStyle = "rgba(255,255,255,0.75)";
   ctx.fillRect(0, 0, W, H);
-  text("Teken je Krabbel op de iPad", W / 2, H * 0.42, H * 0.05);
-  text("Het spel begint als je tekening er is", W / 2, H * 0.5, H * 0.025, C.mid);
+  const [big, small] = waitLines();
+  text(big, W / 2, H * 0.42, H * 0.05);
+  text(small, W / 2, H * 0.5, H * 0.025, C.mid);
 }
 
 function drawReady() {
