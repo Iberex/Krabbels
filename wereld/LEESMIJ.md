@@ -22,6 +22,4 @@ Nieuw level toevoegen: lagen uit Figma exporteren (zie memory wereld-speelbaar-2
 
 **3D (nieuw):** grond, gras, water, ravijn en decor zijn Blender-modellen uit `models/`; enkel de lucht is nog een afbeelding (opnieuw maken: `3-design/assets/glb/bouw_grond.py` en `bouw_gras.py` in Blender draaien en de .glb's naar `models/` kopiëren). `grond.html?level=1` toont enkel die modellen.
 
-**Tutorial:** `level0.json` + `assets/L0/` (opnieuw maken: `maak_level0.py <map met de Figma-exports>`), 3D: `models/voorgrond_level0.glb` en `decor_level0.glb` uit `3-design/assets/glb/bouw_tutorial.py`. De hangende balk staat als `plafond` in de JSON.
-
-**Tutorial → level 1 is één wereld** (`wereld.js`): level 1 begint 30 px voor het einde van de tutorial, elk deel houdt zijn eigen achtergrond (gescheurde papierrand ertussen) en vanaf de overgang is alles grijs-wit tot de Krabbel voorbijkomt (`VOOR` = hoever de kleur vooruit loopt). `?level=1` start in dezelfde wereld bij level 1.
+**Level 0/1 = `final_foreground`** (Figma, pagina LEVELS): startstuk met logo, tutorial, papierrand en level 1 in één wereld, enkel voorgrond. `final.json` + `assets/F/` (opnieuw maken: `maak_final.py <map met exports>`), 3D: `models/voorgrond_levelfinal.glb` (uit `3-design/assets/glb/bouw_tutorial.py`) + grond/gras van level 1. Inkleuren aan/uit en afstand: `wereld.js`. Brug, helling en ladder zijn enkel tekening (nog niet speelbaar).

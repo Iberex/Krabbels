@@ -1,10 +1,11 @@
-// Tutorial en level 1 zijn één doorlopende wereld. De Krabbel loopt gewoon verder en
-// vanaf de overgang wordt de wereld ingekleurd langs het pad.
-export const VOOR = 300;     // zo ver (px) loopt de kleur voor de Krabbel uit
+// Level 0/1 = het frame "final_foreground" uit Figma: startstuk met logo, tutorial, papierrand en level 1,
+// als één doorlopende wereld (voorlopig enkel de voorgrond). Voorbij de papierrand wordt de wereld
+// ingekleurd langs het pad.
+export const INKLEUREN = true;  // false = alles meteen in kleur, zoals in Figma
+export const VOOR = 300;        // zo ver (px) loopt de kleur voor de Krabbel uit
 
-// grillige randen (y = 0..1080, van boven naar onder). Dezelfde formules staan in game3d.js (GLSL).
-export const scheur = (y) => 10 * Math.sin(y * 0.06) + 6 * Math.sin(y * 0.21 + 2) + 3 * Math.sin(y * 0.55);   // gescheurd papier
-export const kras = (y) => 30 * Math.sin(y * 0.043) + 16 * Math.sin(y * 0.151 + 1.3) + 9 * Math.sin(y * 0.47 + 0.4) + (y - 540) * 0.12; // inkleurrand
+// grillige inkleurrand (y = 0..1080, van boven naar onder). Dezelfde formule staat in game3d.js (GLSL).
+export const kras = (y) => 30 * Math.sin(y * 0.043) + 16 * Math.sin(y * 0.151 + 1.3) + 9 * Math.sin(y * 0.47 + 0.4) + (y - 540) * 0.12;
 
 // nog niet ingekleurd = zelfde grijs-witte papier als de tutorial
 export function grijs(img) {
@@ -21,11 +22,18 @@ export function grijs(img) {
   return cv;
 }
 
-// uitknippen tussen twee grillige randen (in wereld-px)
+// uitknippen tussen twee (grillige) randen, in wereld-px
 export function knip(ctx, links, rechts) {
   ctx.beginPath();
   for (let y = -400; y <= 1480; y += 8) ctx.lineTo(links(y), y);
   for (let y = 1480; y >= -400; y -= 8) ctx.lineTo(rechts(y), y);
   ctx.closePath();
   ctx.clip();
+}
+
+// het logo en de losse lagen van final_foreground
+export async function laadPlaten(loadImg) {
+  const reeks = (naam, n) => Promise.all(Array.from({ length: n }, (_, i) => loadImg(`assets/F/${naam}_${i}.png`)));
+  const [blok, gids, logo, rand] = await Promise.all([reeks("blok", 9), reeks("gids", 9), reeks("logo", 3), loadImg("assets/F/rand.png")]);
+  return { blok, gids, logo, rand, logoPlek: { x: 320, y: 200 }, randPlek: { x: 7600, y: 0 } };
 }

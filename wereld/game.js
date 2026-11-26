@@ -2,7 +2,7 @@
 // Lagen komen rechtstreeks uit Figma (pagina "FINAL FINAL FINAL", level_1_final).
 // Besturing: pijltjes. Brug/helling/ladder zitten er nog niet in.
 
-import { VOOR, scheur, kras, grijs, knip } from "./wereld.js";
+import { INKLEUREN, VOOR, kras, grijs, knip, laadPlaten } from "./wereld.js";
 
 const $ = (id) => document.getElementById(id);
 const c2d = $("c2d"), ctx = c2d.getContext("2d");
@@ -33,40 +33,28 @@ const loadImg = (src) => new Promise((res, rej) => {
 
 const AANTAL_LEVELS = 5;
 const gevraagd = Math.max(0, Math.min(AANTAL_LEVELS, parseInt(new URLSearchParams(location.search).get("level")) || 0));
-const SAMEN = gevraagd <= 1;            // tutorial (0) en level 1 zijn één doorlopende wereld
+const SAMEN = gevraagd <= 1;            // 0 en 1 = final_foreground: tutorial en level 1 als één wereld
 const LVL = SAMEN ? 1 : gevraagd;
 
-async function laadDeel(nr, off, inkleuren = false) {
-  const level = await (await fetch(`level${nr}.json`)).json();
-  const dir = `assets/L${nr}/`;
-  const IMG = {
+const level = await (await fetch(SAMEN ? "final.json" : `level${gevraagd}.json`)).json();
+let IMG = null, PLATEN = null;
+if (SAMEN) {
+  PLATEN = await laadPlaten(loadImg);
+  // grijze versies van de stukken voorbij de papierrand
+  const nodig = (i) => (i + 1) * level.tegelBreedte > level.overgang;
+  PLATEN.grijs = { blok: PLATEN.blok.map((t, i) => (nodig(i) ? grijs(t) : null)), gids: PLATEN.gids.map((t, i) => (nodig(i) ? grijs(t) : null)) };
+  if (gevraagd === 1) level.spawn.x = level.overgang + 150;
+} else {
+  const dir = `assets/L${gevraagd}/`;
+  IMG = {
     backdrop: await loadImg(dir + level.backdrop.bestand),
     bg: await Promise.all(level.bg.map((b) => loadImg(dir + b.bestand))),
     achter: await Promise.all(Array.from({ length: level.tegels }, (_, i) => loadImg(`${dir}achter_${i}.png`))),
     grond: await Promise.all(Array.from({ length: level.tegels }, (_, i) => loadImg(`${dir}grond_${i}.png`))),
   };
-  const GRIJS = inkleuren ? { backdrop: grijs(IMG.backdrop), bg: IMG.bg.map(grijs), achter: IMG.achter.map(grijs), grond: IMG.grond.map(grijs) } : null;
-  return { nr, off, level, IMG, GRIJS, inkleuren };
 }
-
-// level 1 begint op x = 30 en sluit zo aan op het einde van de tutorial
-const OVERLAP = 30;
-const delen = SAMEN ? [await laadDeel(0, 0)] : [await laadDeel(gevraagd, 0)];
-if (SAMEN) delen.push(await laadDeel(1, delen[0].level.breedte - OVERLAP, true));
-const GRENS = SAMEN ? delen[0].level.breedte : null; // hier begint het inkleuren
-
-function samengevoegd() {
-  const [a, b] = delen, breedte = b.off + b.level.breedte, top = [];
-  for (let x = 0; x < breedte; x += 2) top.push((x < GRENS ? a.level.top[x / 2] : b.level.top[(x - b.off) / 2]) ?? -1);
-  return {
-    naam: "Tutorial en level 1 · bos", breedte, camMin: 0, stap: 2, top,
-    spawn: { x: gevraagd === 1 ? GRENS + 120 : a.level.spawn.x },
-    deur: { x0: b.level.deur.x0 + b.off, x1: b.level.deur.x1 + b.off },
-    plafond: a.level.plafond,
-  };
-}
-const level = SAMEN ? samengevoegd() : delen[0].level;
-document.title = `Krabbels · ${level.naam}`;
+const GRENS = SAMEN ? level.overgang : null; // vanaf hier wordt er ingekleurd
+document.title = `Krabbels · ${level.naam.replace("Krabbels · ", "")}`;
 
 const W = level.breedte;
 const topAt = (x) => {
@@ -163,7 +151,7 @@ function respawn() {
   while (groundAt(x) === -1 && x > 0) x -= 20;
   S.x = x; S.y = groundAt(x) - 260; S.vx = 0; S.vy = 0; S.flash = 0.45;
 }
-function resetKleur() { if (SAMEN) S.front = S.frontDoel = Math.max(GRENS - 150, level.spawn.x + VOOR); } // voor de overgang is nog niets gekleurd
+function resetKleur() { if (SAMEN) S.front = S.frontDoel = Math.max(GRENS - 300, level.spawn.x + VOOR); } // voor de overgang is nog niets gekleurd
 resetKleur();
 function restart() {
   resetKleur();
@@ -237,7 +225,7 @@ function legFrame() {
   return 1 + (Math.floor(S.anim) % 4);
 }
 const variantNow = () => Math.floor(S.t * 10) % 4 === 3 ? 1 : Math.floor(S.t * 10) % 4; // 0,1,2,1
-const wiggleVariant = () => [0, 1, 2, 1][Math.floor(S.t * 10) % 4];
+const wiggleVariant = () => [0, 1, 2, 1][Math.floor(Math.max(0, S.t) * 10) % 4]; // de eerste dt kan negatief zijn
 
 // ---------------------------------------------------------------- camera
 function updateCamera(dt) {
@@ -263,48 +251,43 @@ function layer(img, b, cx, viewW, frameOffset) {
   }
 }
 
-function achtergrond(deel, img, cx, cy, viewW, viewH) {
-  const L = deel.level, lc = cx - deel.off;
-  ctx.save(); ctx.translate(deel.off, 0);
-  // backdrop: staat stil (of drijft heel traag) en wordt spiegelend herhaald
-  if (L.backdrop.snelheid === 0) ctx.drawImage(img.backdrop, lc, cy, viewW, viewH);
-  else layer(img.backdrop, L.backdrop, lc, viewW, L.frameOffset);
-  // parallax-lagen: spiegelend herhaald
-  L.bg.forEach((b, i) => layer(img.bg[i], b, lc, viewW, L.frameOffset));
-  ctx.restore();
-}
-function voorgrond(deel, img, cx, viewW) {
-  const T = deel.level.tegelBreedte;
-  for (const soort of [img.achter, img.grond]) {
-    for (let i = 0; i < deel.level.tegels; i++) {
-      const x = deel.off + i * T;
-      if (x < cx + viewW && x + T > cx) ctx.drawImage(soort[i], x, 0);
-    }
+// de voorgrond van final_foreground, met alles voorbij de inkleurrand nog grijs
+function tekenTegels(soort, cx, viewW) {
+  const T = level.tegelBreedte;
+  const rand = (y) => (INKLEUREN ? Math.max(GRENS, S.front + kras(y)) : W + 2000);
+  for (let i = 0; i < level.tegels; i++) {
+    const x = i * T;
+    if (x > cx + viewW || x + T < cx) continue;
+    const grijsTegel = INKLEUREN ? PLATEN.grijs[soort][i] : null;
+    if (!grijsTegel) { ctx.drawImage(PLATEN[soort][i], x, 0); continue; }
+    ctx.save(); knip(ctx, () => -2000, rand); ctx.drawImage(PLATEN[soort][i], x, 0); ctx.restore();
+    ctx.save(); knip(ctx, rand, () => W + 2000); ctx.drawImage(grijsTegel, x, 0); ctx.restore();
   }
 }
-// tekent een deel; is het nog niet overal ingekleurd, dan eerst grijs en daarna de kleur tot aan de inkleurrand
-function metKleur(deel, teken) {
-  if (!deel.inkleuren) return teken(deel.IMG);
-  teken(deel.GRIJS);
-  ctx.save(); knip(ctx, () => -1000, (y) => S.front + kras(y)); teken(deel.IMG); ctx.restore();
-}
+const logoBeeld = () => PLATEN.logo[wiggleVariant()]; // zelfde wiggle als de Krabbel
 
 function draw2D() {
   const z = S.cam.z, cx = S.cam.x, cy = 540 - 540 / z;
   const viewW = c2d.width / z, viewH = c2d.height / z;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = "#1b1b22"; ctx.fillRect(0, 0, c2d.width, c2d.height);
+  ctx.fillStyle = SAMEN ? "#ffffff" : "#1b1b22"; ctx.fillRect(0, 0, c2d.width, c2d.height);
   ctx.setTransform(z, 0, 0, z, -cx * z, -cy * z);
-  delen.forEach((deel, i) => {
-    ctx.save();
-    if (SAMEN) { // elk deel houdt zijn eigen lucht en achtergrond, met een gescheurde rand ertussen
-      const rand = (y) => GRENS + scheur(y);
-      if (i === 0) knip(ctx, () => -2000, rand); else knip(ctx, rand, () => W + 2000);
+  if (SAMEN) {
+    tekenTegels("blok", cx, viewW);
+    ctx.drawImage(logoBeeld(), PLATEN.logoPlek.x, PLATEN.logoPlek.y);
+    tekenTegels("gids", cx, viewW);
+  } else {
+    // backdrop: staat stil (of drijft heel traag) en wordt spiegelend herhaald
+    const bd = level.backdrop;
+    if (bd.snelheid === 0) ctx.drawImage(IMG.backdrop, cx, cy, viewW, viewH);
+    else layer(IMG.backdrop, bd, cx, viewW, level.frameOffset);
+    // parallax-lagen: spiegelend herhaald
+    level.bg.forEach((b, i) => layer(IMG.bg[i], b, cx, viewW, level.frameOffset));
+    const T = level.tegelBreedte;
+    for (const soort of [IMG.achter, IMG.grond]) {
+      for (let i = 0; i < level.tegels; i++) if (i * T < cx + viewW && (i + 1) * T > cx) ctx.drawImage(soort[i], i * T, 0);
     }
-    metKleur(deel, (img) => achtergrond(deel, img, cx, cy, viewW, viewH));
-    ctx.restore();
-  });
-  delen.forEach((deel) => metKleur(deel, (img) => voorgrond(deel, img, cx, viewW)));
+  }
   // Krabbel
   const spr = krabbelSprite(wiggleVariant(), legFrame());
   const sc = S.overview ? Math.max(1, 0.55 / z) : 1;
@@ -314,6 +297,7 @@ function draw2D() {
   if (S.flash > 0) ctx.globalAlpha = 0.5 + 0.5 * Math.sin(S.t * 50);
   ctx.drawImage(spr, -FEET_X, -FEET_Y);
   ctx.restore();
+  if (SAMEN) ctx.drawImage(PLATEN.rand, PLATEN.randPlek.x, PLATEN.randPlek.y); // de Krabbel loopt achter de papierrand door
 }
 
 // ---------------------------------------------------------------- 3D (lui geladen)
@@ -324,7 +308,11 @@ async function ensure3D() {
   melding.innerHTML = "3D laden…<small>Dit kan de eerste keer even duren</small>"; melding.hidden = false;
   try {
     const mod = await import("./game3d.js");
-    r3d = await mod.create({ canvas: c3d, delen, W, grens: GRENS, spriteSize: [SP_W, SP_H, FEET_X, FEET_Y] });
+    const delen = SAMEN
+      ? [{ nr: "final", off: 0, kaal: true, level: { modellen: ["voorgrond"] } },
+         { nr: 1, off: level.level1x, kaal: true, inkleuren: INKLEUREN, level: { modellen: ["grond", "gras"] } }]
+      : [{ nr: gevraagd, off: 0, IMG, level }];
+    r3d = await mod.create({ canvas: c3d, delen, W, grens: GRENS, platen: PLATEN, spriteSize: [SP_W, SP_H, FEET_X, FEET_Y] });
   } catch (e) {
     console.error(e);
     melding.innerHTML = "3D kon niet laden<small>Heb je internet? Three.js komt van een CDN. (" + e.message + ")</small>"; melding.hidden = false;
@@ -372,10 +360,10 @@ function frame(now) {
   update(dt);
   updateCamera(dt);
   if (S.mode === "2d") draw2D();
-  else if (r3d) r3d.render(S, dt, krabbelSprite(wiggleVariant(), legFrame()));
+  else if (r3d) r3d.render(S, dt, krabbelSprite(wiggleVariant(), legFrame()), wiggleVariant());
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 const naarLevel = (n) => { location.search = "?level=" + n + (S.mode === "3d" ? "&3d" : ""); };
 if (new URLSearchParams(location.search).has("3d")) setMode("3d");
-window.__krabbels = { S, level, delen, setMode, setOverview, restart, get r3d() { return r3d; } };
+window.__krabbels = { S, level, setMode, setOverview, restart, get r3d() { return r3d; } };

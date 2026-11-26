@@ -13,7 +13,7 @@ const Dc = 540 / Math.tan((FOV / 2) * Math.PI / 180); // afstand waarop 1 px op 
 const OX = 300, OY = 300;   // vaste camerahoek: schuin rechts (OX) en boven (OY)
 const HALF = 43;            // halve diepte van de platformen in de Blender-modellen (px)
 
-export async function create({ canvas, delen, W, grens, spriteSize }) {
+export async function create({ canvas, delen, W, grens, platen, spriteSize }) {
   const [SP_W, SP_H, FEET_X, FEET_Y] = spriteSize;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
@@ -37,10 +37,12 @@ export async function create({ canvas, delen, W, grens, spriteSize }) {
 
   // ------------------------------------------------------------ doorlopende wereld: achtergrond splitsen en inkleuren
   const samen = delen.length > 1;
+  const wit = !!platen; // final_foreground: witte achtergrond zoals in Figma
   const U = { uCam: { value: 0 }, uFront: { value: 0 }, uPlat: { value: 0 }, uBuf: { value: new THREE.Vector2(1, 1) }, uGrens: { value: grens || 0 } };
-  // zijde: 0 = niet knippen, 1 = enkel links van de overgang, 2 = enkel rechts. lineair: tekent naar het tussenbeeld
-  function bewerk(mat, { zijde = 0, kleur = false, lineair = true }) {
-    if (!samen || (!zijde && !kleur) || mat.userData.bewerkt) return;
+  // lineair: het materiaal tekent naar het tussenbeeld (niet rechtstreeks naar het scherm)
+  // snij: niets tonen links van de papierrand (door de schuine kijkhoek piepte het gras van level 1 er anders langs)
+  function bewerk(mat, { kleur = false, lineair = true, snij = false }) {
+    if ((!kleur && !snij) || mat.userData.bewerkt) return;
     mat.userData.bewerkt = true;
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U);
@@ -52,10 +54,9 @@ export async function create({ canvas, delen, W, grens, spriteSize }) {
           vec3 vlak = cameraPosition + (vWereld - cameraPosition) * (cameraPosition.z / (cameraPosition.z - vWereld.z));
           float x = mix(uCam + gl_FragCoord.x / uBuf.x * 1920.0, vlak.x, uPlat);
           float y = mix(1080.0 - gl_FragCoord.y / uBuf.y * 1080.0, 1080.0 - vlak.y, uPlat);
-          ${zijde ? `float scheur = uGrens + 10.0 * sin(y * 0.06) + 6.0 * sin(y * 0.21 + 2.0) + 3.0 * sin(y * 0.55);
-          if (x ${zijde === 1 ? ">=" : "<"} scheur) discard;` : ""}
+          ${snij ? "if (x < uGrens + 12.0) discard;" : ""}
           ${kleur ? `float kras = 30.0 * sin(y * 0.043) + 16.0 * sin(y * 0.151 + 1.3) + 9.0 * sin(y * 0.47 + 0.4) + (y - 540.0) * 0.12;
-          if (x > uFront + kras) {
+          if (x > max(uGrens, uFront + kras)) {
             vec3 c = gl_FragColor.rgb;
             ${lineair ? "c = pow(max(c, 0.0), vec3(1.0 / 2.2));" : ""}
             float g = 0.55 + 0.42 * pow(clamp(dot(c, vec3(0.299, 0.587, 0.114)), 0.0, 1.0), 0.75);
@@ -66,7 +67,7 @@ export async function create({ canvas, delen, W, grens, spriteSize }) {
       sh.fragmentShader = "varying vec3 vWereld;\nuniform float uCam, uFront, uPlat, uGrens;\nuniform vec2 uBuf;\n" +
         sh.fragmentShader.replace("#include <dithering_fragment>", code);
     };
-    mat.customProgramCacheKey = () => `deel-${zijde}-${kleur}-${lineair}`;
+    mat.customProgramCacheKey = () => `kleur-${kleur}-${lineair}-${snij}`;
   }
 
   const lader = new GLTFLoader();
@@ -76,13 +77,12 @@ export async function create({ canvas, delen, W, grens, spriteSize }) {
   zon.position.set(300, 800, 700);
   speel.add(zon);
 
-  for (const [index, { IMG, level, nr: nummer, off, inkleuren }] of delen.entries()) {
-    const zijde = samen ? index + 1 : 0;
+  for (const { IMG, level, nr: nummer, off, inkleuren, kaal } of delen) {
 
     // -------------------------------------------------------- backdrop (de lucht blijft een afbeelding)
     const bdS = (Dc + 20000) / Dc;
+    if (!kaal) {
     const backdrop = plane(achter, makeTex(IMG.backdrop), 1920 * bdS * 4, 1080 * bdS * 4, 0, 540, -20000, level.backdrop.snelheid > 0 ? -1 : 0);
-    bewerk(backdrop.material, { zijde, kleur: inkleuren, lineair: false });
     backdrops.push(backdrop);
     if (level.backdrop.snelheid > 0) { // vanaf level 2 drijft de lucht heel traag mee (spiegelend herhaald)
       const b = level.backdrop, w = b.breedte, r = b.snelheid, s = 1 / r, D = Dc * (s - 1);
@@ -95,8 +95,8 @@ export async function create({ canvas, delen, W, grens, spriteSize }) {
       tex.repeat.set((u1 - u0) / p, 1);
       const baseX = off + PL + (s * (u0 + u1)) / 2;
       const m = plane(achter, tex, (u1 - u0) * s, 1080 * s, baseX, 540, -D, 1);
-      bewerk(m.material, { zijde, kleur: inkleuren, lineair: false });
       luchten.push({ m, D, baseX });
+    }
     }
 
     // -------------------------------------------------------- alle modellen uit Blender
@@ -122,23 +122,17 @@ export async function create({ canvas, delen, W, grens, spriteSize }) {
     // -------------------------------------------------------- parallax voor de verre decorlagen
     // laag 8/9/10 staan in de glb op 120/260/420 px diepte; ze worden zo geschaald en verschoven dat ze
     // er uitzien zoals in het ontwerp en met 50/30/10 % van de camerasnelheid meeschuiven.
-    const ontwerp = { 8: { b: level.bg[2], d: 120 }, 9: { b: level.bg[1], d: 260 }, 10: { b: level.bg[0], d: 420 } };
+    const ontwerp = kaal ? {} : { 8: { b: level.bg[2], d: 120 }, 9: { b: level.bg[1], d: 260 }, 10: { b: level.bg[0], d: 420 } };
     const knopen = [];
-    model.decor.scene.traverse((o) => { const m = /laag(\d+)$/.exec(o.name); if (m && !o.isMesh) knopen.push([o, +m[1]]); });
+    model.decor?.scene.traverse((o) => { const m = /laag(\d+)$/.exec(o.name); if (m && !o.isMesh) knopen.push([o, +m[1]]); });
     const fo = level.frameOffset;
-    const cMin = samen ? Math.max(-off, -1920) : level.camMin;
-    const cMax = Math.max(cMin, samen ? level.breedte : W - 1920);
-    const kopieMat = new Map();
+    const cMin = level.camMin;
+    const cMax = Math.max(cMin, W - 1920);
     knopen.forEach(([knoop, nr]) => {
       const info = ontwerp[nr];
       if (!info) return; // laag 6 en 7 staan gewoon in de wereld
       const { b, d } = info, r = b.snelheid, w = b.breedte, x0 = b.x0 + fo;
       const s = (Dc + d) / Dc;
-      if (samen) knoop.traverse((o) => { // eigen materiaal, want deze lagen worden bij de overgang afgeknipt
-        if (!o.isMesh) return;
-        if (!kopieMat.has(o.material)) { const m = o.material.clone(); bewerk(m, { zijde, kleur: inkleuren }); kopieMat.set(o.material, m); }
-        o.material = kopieMat.get(o.material);
-      });
       // spiegelend herhalen zodat de laag het hele level dekt
       const xMin = r * cMin + (1 - r) * fo, xMax = r * cMax + (1 - r) * fo + 1920;
       const k0 = Math.floor((xMin - 300 - x0) / w), k1 = Math.floor((xMax + 300 - x0) / w);
@@ -156,8 +150,24 @@ export async function create({ canvas, delen, W, grens, spriteSize }) {
       knoop.scale.set(s, s, 1);
       lagen.push({ knoop, r, s, off, fo });
     });
-    // alles wat niet verschuift (grond, gras, voorgronddecor) enkel inkleuren
-    if (inkleuren) groep.traverse((o) => { if (o.isMesh) bewerk(o.material, { kleur: true }); });
+    // alles wat niet verschuift (grond, gras, voorgronddecor) inkleuren
+    const snij = wit && off > 0;
+    if (inkleuren || snij) groep.traverse((o) => { if (o.isMesh) bewerk(o.material, { kleur: inkleuren, snij }); });
+  }
+  // -------------------------------------------------------- platte stukken uit Figma: ankers, tekenlijnen, papierrand, logo
+  // Ze liggen op het speelvlak (z = 0) en vallen zo exact samen met het ontwerp. Hun schaduw zit al in de PNG.
+  let logo = null;
+  if (platen) {
+    const plaat = (img, x, y, order, kleur = false) => {
+      const m = plane(speel, makeTex(img), img.width, img.height, x + img.width / 2, Y3(y + img.height / 2), 0, order);
+      bewerk(m.material, { kleur });
+      return m;
+    };
+    const inkleur = delen.some((d) => d.inkleuren);
+    platen.gids.forEach((img, i) => plaat(img, i * img.width, 0, 2, inkleur && !!platen.grijs.gids[i]));
+    plaat(platen.rand, platen.randPlek.x, platen.randPlek.y, 6);       // voor de Krabbel
+    const m = plaat(platen.logo[0], platen.logoPlek.x, platen.logoPlek.y, 1);
+    logo = { m, tex: platen.logo.map(makeTex) };
   }
   const zetLagen = (cx, plat) => lagen.forEach(({ knoop, r, s, off, fo }) => {
     const c = plat ? fo : cx - off;
@@ -245,8 +255,9 @@ export async function create({ canvas, delen, W, grens, spriteSize }) {
     }
   }
 
-  function render(S, dt, spriteCanvas) {
+  function render(S, dt, spriteCanvas, wiggle = 0) {
     resize();
+    if (logo) logo.m.material.map = logo.tex[wiggle];
     if (spriteCanvas !== lastSprite) { spriteTex.image = spriteCanvas; spriteTex.needsUpdate = true; lastSprite = spriteCanvas; }
     krabbel.position.set(S.x, Y3(S.y - FEET_Y + SP_H / 2), 16);
     krabbel.scale.x = S.face;
@@ -282,7 +293,7 @@ export async function create({ canvas, delen, W, grens, spriteSize }) {
     mengMat.uniforms.schaal.value = (maat.y / 1080) * (overview ? 0.35 : 1);
     // 1) lucht rechtstreeks, 2) speelvlak naar het tussenbeeld, 3) samenvoegen met schaduw
     renderer.setRenderTarget(null);
-    renderer.setClearColor(0x1b1b22, 1); renderer.clear();
+    renderer.setClearColor(wit ? 0xffffff : 0x1b1b22, 1); renderer.clear();
     renderer.render(achter, camera);
     renderer.setRenderTarget(doel);
     renderer.setClearColor(0x000000, 0); renderer.clear();
