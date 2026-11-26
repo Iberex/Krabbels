@@ -1,8 +1,8 @@
 // Krabbels · de wereld (2D en 3D)
-// Eén doorlopende wereld: start met logo, tutorial, papierrand en dan level 1 tot 5 na elkaar.
-// Voorgrond en platformen komen uit wereld.json (maak_wereld.py), de achtergronden per level uit assets/L1-L5.
+// De wereld = het Figma-frame "final_foreground": 9 schermen van 1920 px (start, tutorial, level 1-5),
+// elk met zijn eigen achtergrond. Platformen en tekeningen komen uit wereld.json (maak_wereld.py).
 // Besturing: pijltjes, spatie = springen, ↑↓ = ladder.
-import { lijnen, anker, tekenGids, tekenAnker, vloeit } from "./wereld.js";
+import { lijnen, anker, tekenGids, tekenAnker } from "./wereld.js";
 
 const $ = (id) => document.getElementById(id);
 const c2d = $("c2d"), ctx = c2d.getContext("2d");
@@ -34,27 +34,18 @@ const json = async (pad) => (await fetch(pad)).json();
 const reeks = (map, naam, n) => Promise.all(Array.from({ length: n }, (_, i) => loadImg(`${map}/${naam}_${i}.png`)));
 
 const wereld = await json("wereld.json");
-const W = wereld.breedte, RAND = wereld.rand;
-const VOORAF = 7680;                  // zo breed is het witte stuk (start + tutorial)
+const W = wereld.breedte, RAND = wereld.rand, SCHERM = wereld.scherm;
 const gevraagd = Math.max(0, Math.min(wereld.levels.length, parseInt(new URLSearchParams(location.search).get("level")) || 0));
 
-// de platte stukken van start en tutorial
-const [blok, logo, rand] = await Promise.all([reeks("assets/F", "blok", 4), reeks("assets/F", "logo", 3), loadImg("assets/F/rand.png")]);
-const PLATEN = { logo, rand, logoPlek: { x: 320, y: 200 }, randPlek: { x: RAND - 60, y: 0 } };
-
-// per level: instellingen meteen, beelden op de achtergrond (het level waar je start eerst)
-const delen = await Promise.all(wereld.levels.map(async (l) => ({ ...l, info: await json(`level${l.nr}.json`), img: null })));
-async function laadBeelden(deel) {
-  const map = `assets/L${deel.nr}`, info = deel.info;
-  const [backdrop, bg, achter, grond] = await Promise.all([
-    loadImg(`${map}/${info.backdrop.bestand}`), Promise.all(info.bg.map((b) => loadImg(`${map}/${b.bestand}`))),
-    reeks(map, "achter", info.tegels), reeks(map, "grond", info.tegels),
-  ]);
-  deel.img = { backdrop, bg, achter, grond };
-}
-const eerste = Math.max(0, gevraagd - 1);
-await laadBeelden(delen[eerste]);
-(async () => { for (const k of [1, 2, 3, 4, -1, -2, -3, -4]) { const d = delen[eerste + k]; if (d && !d.img) await laadBeelden(d); } })();
+// start en tutorial (platte stukken uit final_foreground) en de voorgrond van de levels (grond, gras, water,
+// ravijnen, potloden, deur)
+const level1 = await json("level1.json");
+const [achtergronden, blok, logo, rand, achter, grond] = await Promise.all([
+  Promise.all(Array.from({ length: wereld.schermen }, (_, i) => loadImg(`assets/achtergrond/scherm_${i}.jpg`))),
+  reeks("assets/F", "blok", 4), reeks("assets/F", "logo", 3), loadImg("assets/F/rand.png"),
+  reeks("assets/L1", "achter", level1.tegels), reeks("assets/L1", "grond", level1.tegels),
+]);
+const PLATEN = { achtergronden, logo, rand, logoPlek: { x: 320, y: 200 }, randPlek: { x: RAND - 60, y: 0 } };
 document.title = "Krabbels · de wereld";
 
 // ---------------------------------------------------------------- waar je kan staan
@@ -156,7 +147,7 @@ function krabbelSprite(variant, leg) {
 }
 
 // ---------------------------------------------------------------- spelstaat
-const spawnX = gevraagd ? delen[gevraagd - 1].x + 150 : 150;
+const spawnX = gevraagd ? wereld.levels[gevraagd - 1].x + 150 : 150;
 const S = {
   x: spawnX, y: 0, vx: 0, vy: 0, onGround: false, face: 1,
   t: 0, coyote: 0, buffer: 0, jumpHeld: false, anim: 0,
@@ -265,35 +256,12 @@ function updateCamera(dt) {
   const zT = S.overview ? fit : 1;
   S.cam.z += (zT - S.cam.z) * Math.min(1, dt * 7);
   const viewW = c2d.width / S.cam.z;
-  let t = Math.max(0, Math.min(W - viewW - 40, S.x - viewW * 0.38)); // de aarde stopt net voor het einde
+  let t = Math.max(0, Math.min(W - viewW, S.x - viewW * 0.38));
   if (S.overview) t = (W - viewW) / 2;
   S.cam.x += (t - S.cam.x) * Math.min(1, dt * 6);
 }
 
 // ---------------------------------------------------------------- 2D tekenen
-// Achtergrondlaag die op het venster van je Figma-frame exact uitgelijnd staat en daarna trager meeschuift.
-function laag(g, img, b, cx, viewW, frameOffset) {
-  const r = b.snelheid, w = b.breedte, L = b.x0 + frameOffset + (1 - r) * (cx - frameOffset);
-  const k0 = Math.floor((cx - L) / w), k1 = Math.ceil((cx + viewW - L) / w);
-  for (let k = k0; k <= k1; k++) {
-    const x = L + k * w;
-    if (k & 1) { g.save(); g.translate(x + w, 0); g.scale(-1, 1); g.drawImage(img, 0, 0, w, 1080); g.restore(); }
-    else g.drawImage(img, x, 0, w, 1080);
-  }
-}
-// de achtergrond van één level; g staat al in wereld-px
-function achtergrond(g, deel, cx, cy, viewW, viewH) {
-  if (!deel.img) return;
-  const info = deel.info, lc = cx - deel.x;
-  g.save(); g.translate(deel.x, 0);
-  if (info.backdrop.snelheid === 0) g.drawImage(deel.img.backdrop, lc, cy, viewW, viewH);
-  else laag(g, deel.img.backdrop, info.backdrop, lc, viewW, info.frameOffset);
-  info.bg.forEach((b, i) => laag(g, deel.img.bg[i], b, lc, viewW, info.frameOffset));
-  g.restore();
-}
-const tussen = document.createElement("canvas"); tussen.width = c2d.width; tussen.height = c2d.height;
-const tg = tussen.getContext("2d");
-
 // ankers, stippellijnen en tekeningen: elk stuk een keer vooraf tekenen
 const GIDSEN = [
   ...lijnen(wereld).map((punten, i) => tekenGids(punten, 11 + i * 97)),
@@ -307,32 +275,13 @@ function draw2D() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, c2d.width, c2d.height);
   ctx.setTransform(z, 0, 0, z, -cx * z, -cy * z);
-  // achtergronden (start en tutorial zijn wit, zoals in Figma)
-  if (S.overview) {
-    for (const d of delen) {
-      const x0 = Math.max(d.x, VOORAF);
-      ctx.save(); ctx.beginPath(); ctx.rect(x0, cy, d.x + d.breedte - x0, viewH); ctx.clip();
-      achtergrond(ctx, d, cx, cy, viewW, viewH); ctx.restore();
-    }
-  } else if (cx + viewW > VOORAF) {
-    const { basis, volgende, mate } = vloeit(delen, cx + 960);
-    ctx.save(); ctx.beginPath(); ctx.rect(VOORAF, 0, W, 1080); ctx.clip();
-    achtergrond(ctx, delen[basis], cx, 0, 1920, 1080);
-    if (mate > 0) { // het volgende level vloeit er geleidelijk overheen
-      tg.setTransform(1, 0, 0, 1, -cx, 0); tg.clearRect(cx, 0, 1920, 1080);
-      achtergrond(tg, delen[volgende], cx, 0, 1920, 1080);
-      ctx.globalAlpha = mate; ctx.drawImage(tussen, cx, 0);
-    }
-    ctx.restore();
-  }
+  // elk scherm van 1920 px heeft zijn eigen achtergrond
+  PLATEN.achtergronden.forEach((img, i) => { if (inBeeld(i * SCHERM, SCHERM)) ctx.drawImage(img, i * SCHERM, 0, SCHERM + 1, 1080); });
   // voorgrond
-  blok.forEach((t, i) => { if (inBeeld(i * 1920, 1920)) ctx.drawImage(t, i * 1920, 0); });
-  if (inBeeld(0, 1920)) ctx.drawImage(PLATEN.logo[wiggle()], PLATEN.logoPlek.x, PLATEN.logoPlek.y); // zelfde wiggle als de Krabbel
-  for (const d of delen) {
-    if (!d.img) continue;
-    for (const soort of [d.img.achter, d.img.grond]) {
-      soort.forEach((t, i) => { const x = d.x + i * d.info.tegelBreedte; if (inBeeld(x, d.info.tegelBreedte)) ctx.drawImage(t, x, 0); });
-    }
+  blok.forEach((t, i) => { if (inBeeld(i * SCHERM, SCHERM)) ctx.drawImage(t, i * SCHERM, 0); });
+  if (inBeeld(0, SCHERM)) ctx.drawImage(PLATEN.logo[wiggle()], PLATEN.logoPlek.x, PLATEN.logoPlek.y); // zelfde wiggle als de Krabbel
+  for (const soort of [achter, grond]) {
+    soort.forEach((t, i) => { const x = wereld.start + i * level1.tegelBreedte; if (inBeeld(x, level1.tegelBreedte)) ctx.drawImage(t, x, 0); });
   }
   for (const s of GIDSEN) if (inBeeld(s.x, s.beeld.width)) ctx.drawImage(s.beeld, s.x, s.y);
   // laagvolgorde: wereld < tekeningen/ankers < papierrand < Krabbel
@@ -355,7 +304,7 @@ async function ensure3D() {
   melding.innerHTML = "3D laden…<small>Dit kan de eerste keer even duren</small>"; melding.hidden = false;
   try {
     const mod = await import("./game3d.js");
-    r3d = await mod.create({ canvas: c3d, wereld, delen, platen: PLATEN, spriteSize: [SP_W, SP_H, FEET_X, FEET_Y] });
+    r3d = await mod.create({ canvas: c3d, wereld, platen: PLATEN, spriteSize: [SP_W, SP_H, FEET_X, FEET_Y] });
     r3d.setOverview(S.overview);
   } catch (e) {
     console.error(e);
@@ -392,7 +341,7 @@ addEventListener("keydown", (e) => {
   if (e.code === "KeyV") setMode(S.mode === "2d" ? "3d" : "2d");
   if (e.code === "KeyW") setOverview(!S.overview);
   if (e.code === "KeyR") restart();
-  if (/^Digit[0-9]$/.test(e.code) && +e.code.slice(5) <= delen.length) naarLevel(+e.code.slice(5));
+  if (/^Digit[0-9]$/.test(e.code) && +e.code.slice(5) <= wereld.levels.length) naarLevel(+e.code.slice(5));
 });
 addEventListener("keyup", (e) => { keys[e.code] = false; });
 addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
@@ -409,4 +358,4 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 if (new URLSearchParams(location.search).has("3d")) setMode("3d");
-window.__krabbels = { S, wereld, delen, setMode, setOverview, restart, get r3d() { return r3d; } };
+window.__krabbels = { S, wereld, setMode, setOverview, restart, get r3d() { return r3d; } };

@@ -1,17 +1,4 @@
-// Hulpfuncties voor de wereld: de tekeningen (brug, helling, ladder), de ankers en het overvloeien van de achtergronden.
-
-// over zoveel px vloeit de achtergrond van het ene level in het volgende
-export const OVERVLOEI = 1100;
-// welke achtergrond(en) horen bij het midden van het beeld?
-export function vloeit(delen, midden) {
-  let basis = 0, mate = 0;
-  for (let k = 1; k < delen.length; k++) {
-    const t = (midden - (delen[k].x - OVERVLOEI / 2)) / OVERVLOEI;
-    if (t >= 1) basis = k;
-    else if (t > 0) mate = t;
-  }
-  return { basis, volgende: Math.min(delen.length - 1, basis + 1), mate };
-}
+// Hulpfuncties voor de wereld: de tekeningen (brug, helling, ladder) en de ankers.
 
 // Punten van de brugboog (300 breed, 60 hoog) vanaf het linkeranker, zoals in Figma.
 function boog(x0, y0) {
