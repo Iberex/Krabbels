@@ -2,6 +2,8 @@
 // Lagen komen rechtstreeks uit Figma (pagina "FINAL FINAL FINAL", level_1_final).
 // Besturing: pijltjes. Brug/helling/ladder zitten er nog niet in.
 
+import { VOOR, scheur, kras, grijs, knip } from "./wereld.js";
+
 const $ = (id) => document.getElementById(id);
 const c2d = $("c2d"), ctx = c2d.getContext("2d");
 const c3d = $("c3d");
@@ -30,16 +32,41 @@ const loadImg = (src) => new Promise((res, rej) => {
 });
 
 const AANTAL_LEVELS = 5;
-const LVL = Math.max(0, Math.min(AANTAL_LEVELS, parseInt(new URLSearchParams(location.search).get("level")) || 0)); // 0 = tutorial
-const level = await (await fetch(`level${LVL}.json`)).json();
-const dir = `assets/L${LVL}/`;
+const gevraagd = Math.max(0, Math.min(AANTAL_LEVELS, parseInt(new URLSearchParams(location.search).get("level")) || 0));
+const SAMEN = gevraagd <= 1;            // tutorial (0) en level 1 zijn één doorlopende wereld
+const LVL = SAMEN ? 1 : gevraagd;
+
+async function laadDeel(nr, off, inkleuren = false) {
+  const level = await (await fetch(`level${nr}.json`)).json();
+  const dir = `assets/L${nr}/`;
+  const IMG = {
+    backdrop: await loadImg(dir + level.backdrop.bestand),
+    bg: await Promise.all(level.bg.map((b) => loadImg(dir + b.bestand))),
+    achter: await Promise.all(Array.from({ length: level.tegels }, (_, i) => loadImg(`${dir}achter_${i}.png`))),
+    grond: await Promise.all(Array.from({ length: level.tegels }, (_, i) => loadImg(`${dir}grond_${i}.png`))),
+  };
+  const GRIJS = inkleuren ? { backdrop: grijs(IMG.backdrop), bg: IMG.bg.map(grijs), achter: IMG.achter.map(grijs), grond: IMG.grond.map(grijs) } : null;
+  return { nr, off, level, IMG, GRIJS, inkleuren };
+}
+
+// level 1 begint op x = 30 en sluit zo aan op het einde van de tutorial
+const OVERLAP = 30;
+const delen = SAMEN ? [await laadDeel(0, 0)] : [await laadDeel(gevraagd, 0)];
+if (SAMEN) delen.push(await laadDeel(1, delen[0].level.breedte - OVERLAP, true));
+const GRENS = SAMEN ? delen[0].level.breedte : null; // hier begint het inkleuren
+
+function samengevoegd() {
+  const [a, b] = delen, breedte = b.off + b.level.breedte, top = [];
+  for (let x = 0; x < breedte; x += 2) top.push((x < GRENS ? a.level.top[x / 2] : b.level.top[(x - b.off) / 2]) ?? -1);
+  return {
+    naam: "Tutorial en level 1 · bos", breedte, camMin: 0, stap: 2, top,
+    spawn: { x: gevraagd === 1 ? GRENS + 120 : a.level.spawn.x },
+    deur: { x0: b.level.deur.x0 + b.off, x1: b.level.deur.x1 + b.off },
+    plafond: a.level.plafond,
+  };
+}
+const level = SAMEN ? samengevoegd() : delen[0].level;
 document.title = `Krabbels · ${level.naam}`;
-const IMG = {
-  backdrop: await loadImg(dir + level.backdrop.bestand),
-  bg: await Promise.all(level.bg.map((b) => loadImg(dir + b.bestand))),
-  achter: await Promise.all(Array.from({ length: level.tegels }, (_, i) => loadImg(`${dir}achter_${i}.png`))),
-  grond: await Promise.all(Array.from({ length: level.tegels }, (_, i) => loadImg(`${dir}grond_${i}.png`))),
-};
 
 const W = level.breedte;
 const topAt = (x) => {
@@ -124,6 +151,7 @@ const S = {
   x: level.spawn.x, y: 0, vx: 0, vy: 0, onGround: false, face: 1,
   t: 0, coyote: 0, buffer: 0, jumpHeld: false, anim: 0,
   safeX: level.spawn.x, won: false, flash: 0,
+  front: 0, frontDoel: 0, // tot waar de wereld ingekleurd is
   cam: { x: 0, z: 1 }, mode: "2d", overview: false,
 };
 S.y = (groundAt(S.x) || 750) - 300;
@@ -131,11 +159,14 @@ const keys = {};
 const fit = c2d.width / W;
 
 function respawn() {
-  let x = Math.max(level.spawn.x, S.safeX - C.respawnBack);
+  let x = Math.max(150, S.safeX - C.respawnBack);
   while (groundAt(x) === -1 && x > 0) x -= 20;
   S.x = x; S.y = groundAt(x) - 260; S.vx = 0; S.vy = 0; S.flash = 0.45;
 }
+function resetKleur() { if (SAMEN) S.front = S.frontDoel = Math.max(GRENS - 150, level.spawn.x + VOOR); } // voor de overgang is nog niets gekleurd
+resetKleur();
 function restart() {
+  resetKleur();
   S.safeX = level.spawn.x; S.won = false; melding.hidden = true;
   S.x = level.spawn.x; S.y = groundAt(S.x) - 300; S.vx = 0; S.vy = 0; S.flash = 0.3;
 }
@@ -184,12 +215,17 @@ function update(dt) {
   if (S.y > C.fallDeath) respawn();
   // lopen-animatie
   if (S.onGround && Math.abs(S.vx) > 30) S.anim += dt * 9 * (Math.abs(S.vx) / C.speed + 0.3); else if (S.onGround) S.anim = 0;
+  // inkleuren langs het pad (kleur blijft, ook als je terugloopt)
+  if (SAMEN) {
+    S.frontDoel = Math.max(S.frontDoel, S.won ? W + 600 : S.x + VOOR);
+    S.front += (S.frontDoel - S.front) * Math.min(1, dt * 3);
+  }
   // einde
   const eind = level.deur ? (level.deur.x0 + level.deur.x1) / 2 - 40 : W - 260;
   if (!S.won && S.onGround && S.x >= eind) {
     S.won = true;
     const volgende = LVL < AANTAL_LEVELS;
-    melding.innerHTML = `${LVL ? `Level ${LVL}` : "Tutorial"} klaar!<small>${volgende ? `Druk op Enter voor level ${LVL + 1}` : "Dat was het laatste level"} · R = opnieuw</small>`;
+    melding.innerHTML = `Level ${LVL} klaar!<small>${volgende ? `Druk op Enter voor level ${LVL + 1}` : "Dat was het laatste level"} · R = opnieuw</small>`;
     melding.hidden = false;
   }
   $("vbalk").style.width = Math.min(100, (S.x / (eind + 40)) * 100) + "%";
@@ -216,8 +252,8 @@ function updateCamera(dt) {
 
 // ---------------------------------------------------------------- 2D tekenen
 // Laag die op het venster van je Figma-frame (wereld-x = frameOffset) exact uitgelijnd staat en daarna trager meeschuift.
-function layer(img, b, cx, viewW) {
-  const r = b.snelheid, w = b.breedte, fo = level.frameOffset;
+function layer(img, b, cx, viewW, frameOffset) {
+  const r = b.snelheid, w = b.breedte, fo = frameOffset;
   const L = b.x0 + fo + (1 - r) * (cx - fo);
   const k0 = Math.floor((cx - L) / w), k1 = Math.ceil((cx + viewW - L) / w);
   for (let k = k0; k <= k1; k++) {
@@ -227,21 +263,48 @@ function layer(img, b, cx, viewW) {
   }
 }
 
+function achtergrond(deel, img, cx, cy, viewW, viewH) {
+  const L = deel.level, lc = cx - deel.off;
+  ctx.save(); ctx.translate(deel.off, 0);
+  // backdrop: staat stil (of drijft heel traag) en wordt spiegelend herhaald
+  if (L.backdrop.snelheid === 0) ctx.drawImage(img.backdrop, lc, cy, viewW, viewH);
+  else layer(img.backdrop, L.backdrop, lc, viewW, L.frameOffset);
+  // parallax-lagen: spiegelend herhaald
+  L.bg.forEach((b, i) => layer(img.bg[i], b, lc, viewW, L.frameOffset));
+  ctx.restore();
+}
+function voorgrond(deel, img, cx, viewW) {
+  const T = deel.level.tegelBreedte;
+  for (const soort of [img.achter, img.grond]) {
+    for (let i = 0; i < deel.level.tegels; i++) {
+      const x = deel.off + i * T;
+      if (x < cx + viewW && x + T > cx) ctx.drawImage(soort[i], x, 0);
+    }
+  }
+}
+// tekent een deel; is het nog niet overal ingekleurd, dan eerst grijs en daarna de kleur tot aan de inkleurrand
+function metKleur(deel, teken) {
+  if (!deel.inkleuren) return teken(deel.IMG);
+  teken(deel.GRIJS);
+  ctx.save(); knip(ctx, () => -1000, (y) => S.front + kras(y)); teken(deel.IMG); ctx.restore();
+}
+
 function draw2D() {
   const z = S.cam.z, cx = S.cam.x, cy = 540 - 540 / z;
   const viewW = c2d.width / z, viewH = c2d.height / z;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#1b1b22"; ctx.fillRect(0, 0, c2d.width, c2d.height);
   ctx.setTransform(z, 0, 0, z, -cx * z, -cy * z);
-  // backdrop: staat stil (of drijft heel traag) en wordt spiegelend herhaald
-  const bd = level.backdrop;
-  if (bd.snelheid === 0) ctx.drawImage(IMG.backdrop, cx, cy, viewW, viewH);
-  else layer(IMG.backdrop, bd, cx, viewW);
-  // parallax-lagen: spiegelend herhaald
-  level.bg.forEach((b, i) => layer(IMG.bg[i], b, cx, viewW));
-  const T = level.tegelBreedte;
-  for (let i = 0; i < level.tegels; i++) if (i * T < cx + viewW && (i + 1) * T > cx) ctx.drawImage(IMG.achter[i], i * T, 0);
-  for (let i = 0; i < level.tegels; i++) if (i * T < cx + viewW && (i + 1) * T > cx) ctx.drawImage(IMG.grond[i], i * T, 0);
+  delen.forEach((deel, i) => {
+    ctx.save();
+    if (SAMEN) { // elk deel houdt zijn eigen lucht en achtergrond, met een gescheurde rand ertussen
+      const rand = (y) => GRENS + scheur(y);
+      if (i === 0) knip(ctx, () => -2000, rand); else knip(ctx, rand, () => W + 2000);
+    }
+    metKleur(deel, (img) => achtergrond(deel, img, cx, cy, viewW, viewH));
+    ctx.restore();
+  });
+  delen.forEach((deel) => metKleur(deel, (img) => voorgrond(deel, img, cx, viewW)));
   // Krabbel
   const spr = krabbelSprite(wiggleVariant(), legFrame());
   const sc = S.overview ? Math.max(1, 0.55 / z) : 1;
@@ -261,7 +324,7 @@ async function ensure3D() {
   melding.innerHTML = "3D laden…<small>Dit kan de eerste keer even duren</small>"; melding.hidden = false;
   try {
     const mod = await import("./game3d.js");
-    r3d = await mod.create({ canvas: c3d, IMG, level, nummer: LVL, W, spriteSize: [SP_W, SP_H, FEET_X, FEET_Y] });
+    r3d = await mod.create({ canvas: c3d, delen, W, grens: GRENS, spriteSize: [SP_W, SP_H, FEET_X, FEET_Y] });
   } catch (e) {
     console.error(e);
     melding.innerHTML = "3D kon niet laden<small>Heb je internet? Three.js komt van een CDN. (" + e.message + ")</small>"; melding.hidden = false;
@@ -315,4 +378,4 @@ function frame(now) {
 requestAnimationFrame(frame);
 const naarLevel = (n) => { location.search = "?level=" + n + (S.mode === "3d" ? "&3d" : ""); };
 if (new URLSearchParams(location.search).has("3d")) setMode("3d");
-window.__krabbels = { S, level, setMode, setOverview, restart, get r3d() { return r3d; } };
+window.__krabbels = { S, level, delen, setMode, setOverview, restart, get r3d() { return r3d; } };
