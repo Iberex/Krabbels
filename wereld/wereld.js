@@ -85,23 +85,62 @@ function krijt(ctx, punten, zaad) {
   ctx.restore();
 }
 
-// ---------------------------------------------------------------- achtergrond van de levels (parallax)
-// Doorlopende stroken uit het Figma-sjabloon. Een strook met snelheid r is 1920 + r x 9600 px breed; wanneer de
-// camera precies op level N staat, zie je ze vanaf x = N x r x 1920 (de gekleurde vensters in Figma).
-export const LEVELS_VANAF = 7680;          // links hiervan: start en tutorial
-export const BEGIN = LEVELS_VANAF - 1920;  // camerastand waarop de stroken beginnen te schuiven
-export const STROKEN = [["laag10.png", 0.1], ["laag9.png", 0.3], ["laag8.png", 0.5]];
-// waar de linkerkant van een strook staat (in wereld-px) bij camerastand cam
-export const strookX = (cam, r) => (1 - r) * cam + r * BEGIN;
+// ---------------------------------------------------------------- camera
+// Start en tutorial: de camera volgt de Krabbel. Vanaf de levels staat ze stil per scherm van 1920 px en
+// schuift ze pas door als de Krabbel de rand van het scherm voorbij is. Tijdens het schuiven komen de
+// achtergrondlagen iets later dan de voorgrond (hoe verder, hoe later): dat geeft diepte. Zodra de camera
+// stilstaat, ligt elke laag weer exact zoals in het ontwerp.
+export const SCHERM = 1920;
+export const LEVELS_VANAF = 7680;                 // links hiervan: start en tutorial
+export const AANTAL = 5;                          // levelschermen
+export const schermX = (k) => LEVELS_VANAF + k * SCHERM;
+const VOLG_MAX = LEVELS_VANAF - SCHERM;           // verder volgt de camera niet mee tot de Krabbel in level 1 is
+// wanneer elke laag vertrekt en aankomt tijdens het schuiven (seconden)
+const TIJDEN = { voor: [0, 1.25], l8: [0.08, 1.42], l9: [0.18, 1.6], l10: [0.28, 1.78], lucht: [0.2, 1.6] };
+export const DUUR = 1.8;
 
-// voor "hele wereld": de vijf levelschermen naast elkaar, elk zoals je het ziet als de camera erop staat
-export function overzicht(lucht, stroken) {
-  const cv = document.createElement("canvas"); cv.width = 5 * 1920; cv.height = 1080;
-  const g = cv.getContext("2d");
-  for (let n = 1; n <= 5; n++) {
-    const x = (n - 1) * 1920;
-    g.drawImage(lucht, x, 0, 1920, 1080);
-    stroken.forEach((img, i) => g.drawImage(img, n * STROKEN[i][1] * 1920, 0, 1920, 1080, x, 0, 1920, 1080));
-  }
-  return cv;
+const klem = (v, a, b) => Math.max(a, Math.min(b, v));
+const zacht = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+export const volgDoel = (x) => klem(x - 730, 0, VOLG_MAX);
+
+export function maakCamera() {
+  const c = { x: 0, z: 1, modus: "volg", k: 0, pan: null, l8: 0, l9: 0, l10: 0, lucht: 0 };
+  const gelijk = (v) => { c.x = c.l8 = c.l9 = c.l10 = c.lucht = v; };
+  // meteen op de juiste plek (start, opnieuw, level kiezen)
+  c.zet = (x) => {
+    c.pan = null;
+    if (x >= LEVELS_VANAF) { c.modus = "scherm"; c.k = klem(Math.floor((x - LEVELS_VANAF) / SCHERM), 0, AANTAL - 1); gelijk(schermX(c.k)); }
+    else { c.modus = "volg"; gelijk(volgDoel(x)); }
+  };
+  const schuif = (naar, modus, k, diepte) => { c.pan = { van: c.x, naar, t: 0, modus, k, diepte }; };
+  c.stap = (x, dt) => {
+    if (c.pan) {
+      const p = c.pan;
+      p.t += dt;
+      const op = ([a, b]) => p.van + (p.naar - p.van) * zacht(klem((p.t - a) / (b - a), 0, 1));
+      c.x = op(TIJDEN.voor);
+      for (const laag of ["l8", "l9", "l10", "lucht"]) c[laag] = p.diepte ? op(TIJDEN[laag]) : c.x;
+      if (p.t >= (p.diepte ? DUUR : TIJDEN.voor[1])) { c.modus = p.modus; c.k = p.k; c.pan = null; gelijk(p.naar); }
+      return;
+    }
+    if (c.modus === "volg") {
+      if (x > LEVELS_VANAF + 10) schuif(schermX(0), "scherm", 0, false);
+      else gelijk(c.x + (volgDoel(x) - c.x) * Math.min(1, dt * 6));
+      return;
+    }
+    gelijk(schermX(c.k));
+    if (c.k < AANTAL - 1 && x > schermX(c.k + 1) + 10) schuif(schermX(c.k + 1), "scherm", c.k + 1, true);
+    else if (x < schermX(c.k) - 10) {
+      if (c.k === 0) schuif(volgDoel(x), "volg", 0, false);
+      else schuif(schermX(c.k - 1), "scherm", c.k - 1, true);
+    }
+  };
+  return c;
 }
+
+// welke schermachtergrond-lucht ligt onder, en hoe ver is de volgende er al overheen gekomen?
+export function luchtStand(camLucht) {
+  const pos = klem((camLucht - LEVELS_VANAF) / SCHERM, 0, AANTAL - 1);
+  return { onder: Math.floor(pos), mate: pos - Math.floor(pos) };
+}
+export const LAGEN = ["l10", "l9", "l8"];        // van ver naar dichtbij

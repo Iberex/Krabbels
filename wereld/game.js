@@ -2,7 +2,7 @@
 // De wereld = het Figma-frame "final_foreground": 9 schermen van 1920 px (start, tutorial, level 1-5),
 // elk met zijn eigen achtergrond. Platformen en tekeningen komen uit wereld.json (maak_wereld.py).
 // Besturing: pijltjes, spatie = springen, ↑↓ = ladder.
-import { lijnen, anker, tekenGids, tekenAnker, LEVELS_VANAF, BEGIN, STROKEN, strookX, overzicht } from "./wereld.js";
+import { lijnen, anker, tekenGids, tekenAnker, LEVELS_VANAF, AANTAL, schermX, maakCamera, luchtStand, LAGEN } from "./wereld.js";
 
 const $ = (id) => document.getElementById(id);
 const c2d = $("c2d"), ctx = c2d.getContext("2d");
@@ -41,13 +41,14 @@ const gevraagd = Math.max(0, Math.min(wereld.levels.length, parseInt(new URLSear
 // start en tutorial (platte stukken uit final_foreground) en de voorgrond van de levels (grond, gras, water,
 // ravijnen, potloden, deur)
 const level1 = await json("level1.json");
-const [achtergronden, lucht, stroken, blok, logo, rand, achter, grond] = await Promise.all([
-  reeks0(4), loadImg("assets/achtergrond/lucht.jpg"),                 // start en tutorial: een beeld per scherm
-  Promise.all(STROKEN.map(([naam]) => loadImg(`assets/achtergrond/${naam}`))),
+// per levelscherm: lucht en drie achtergrondlagen
+const levelBeeld = (naam) => Promise.all(Array.from({ length: AANTAL }, (_, k) => loadImg(`assets/achtergrond/L${k + 1}_${naam}`)));
+const [achtergronden, lucht, l10, l9, l8, blok, logo, rand, achter, grond] = await Promise.all([
+  reeks0(4), levelBeeld("lucht.jpg"), levelBeeld("10.png"), levelBeeld("9.png"), levelBeeld("8.png"), // eerst start en tutorial
   reeks("assets/F", "blok", 4), reeks("assets/F", "logo", 3), loadImg("assets/F/rand.png"),
   reeks("assets/L1", "achter", level1.tegels), reeks("assets/L1", "grond", level1.tegels),
 ]);
-const PLATEN = { achtergronden, lucht, stroken, overzicht: overzicht(lucht, stroken), logo, rand, logoPlek: { x: 320, y: 200 }, randPlek: { x: RAND - 60, y: 0 } };
+const PLATEN = { achtergronden, lucht, l10, l9, l8, logo, rand, logoPlek: { x: 320, y: 200 }, randPlek: { x: RAND - 60, y: 0 } };
 document.title = "Krabbels · de wereld";
 
 // ---------------------------------------------------------------- waar je kan staan
@@ -155,8 +156,9 @@ const S = {
   t: 0, coyote: 0, buffer: 0, jumpHeld: false, anim: 0,
   safeX: spawnX, safeY: null, won: false, flash: 0, ladder: null,
   diepte: 0, // 3D: hoe ver de Krabbel naar voren staat (0 = midden van het platform)
-  cam: { x: Math.max(0, spawnX - 730), z: 1 }, mode: "2d", overview: false,
+  cam: maakCamera(), mode: "2d", overview: false,
 };
+S.cam.zet(spawnX);
 S.y = groundAt(S.x) - 300;
 const keys = {};
 const fit = c2d.width / W;
@@ -165,12 +167,15 @@ function respawn() {
   let x = Math.max(150, S.safeX - C.respawnBack);
   while (groundAt(x) === -1 && x > 0) x -= 20;
   const vanaf = S.safeY === null ? -Infinity : S.safeY - 130; // niet op een hoger blok terechtkomen
+  // blijf op het scherm waar de camera nu staat
+  if (S.cam.modus === "scherm" && S.safeX >= schermX(S.cam.k)) x = Math.max(x, schermX(S.cam.k) + 90);
   const grond = groundAt(x, vanaf) === -1 ? groundAt(x) : groundAt(x, vanaf);
   S.x = x; S.y = grond - 260; S.vx = 0; S.vy = 0; S.ladder = null; S.flash = 0.45;
 }
 function restart() {
   S.safeX = spawnX; S.safeY = null; S.ladder = null; S.won = false; melding.hidden = true;
   S.x = spawnX; S.y = groundAt(S.x) - 300; S.vx = 0; S.vy = 0; S.flash = 0.3;
+  S.cam.zet(spawnX);
 }
 
 function update(dt) {
@@ -257,10 +262,11 @@ const wiggle = () => [0, 1, 2, 1][Math.floor(Math.max(0, S.t) * 10) % 4]; // de 
 function updateCamera(dt) {
   const zT = S.overview ? fit : 1;
   S.cam.z += (zT - S.cam.z) * Math.min(1, dt * 7);
-  const viewW = c2d.width / S.cam.z;
-  let t = Math.max(0, Math.min(W - viewW, S.x - viewW * 0.38));
-  if (S.overview) t = (W - viewW) / 2;
-  S.cam.x += (t - S.cam.x) * Math.min(1, dt * 6);
+  if (S.overview) { // hele wereld in beeld
+    const t = (W - c2d.width / S.cam.z) / 2;
+    S.cam.x += (t - S.cam.x) * Math.min(1, dt * 6);
+    S.cam.l8 = S.cam.l9 = S.cam.l10 = S.cam.lucht = S.cam.x;
+  } else S.cam.stap(S.x, dt);
 }
 
 // ---------------------------------------------------------------- 2D tekenen
@@ -279,13 +285,20 @@ function draw2D() {
   ctx.setTransform(z, 0, 0, z, -cx * z, -cy * z);
   // start en tutorial: grijs papier per scherm
   PLATEN.achtergronden.forEach((img, i) => { if (inBeeld(i * SCHERM, SCHERM)) ctx.drawImage(img, i * SCHERM, 0, SCHERM + 1, 1080); });
-  // levels: lucht die stilstaat met daarvoor drie stroken die trager schuiven (diepte)
-  if (S.overview) ctx.drawImage(PLATEN.overzicht, LEVELS_VANAF, 0);
-  else if (cx + viewW > LEVELS_VANAF) {
+  // levels: per scherm een lucht en drie lagen (zie wereld.js)
+  if (S.overview) {
+    for (let k = 0; k < AANTAL; k++) for (const naam of ["lucht", ...LAGEN]) ctx.drawImage(PLATEN[naam][k], schermX(k), 0);
+  } else if (cx + viewW > LEVELS_VANAF) {
     ctx.save(); ctx.beginPath(); ctx.rect(LEVELS_VANAF, cy, W, viewH); ctx.clip();
-    const cam = Math.max(BEGIN, cx);
-    ctx.drawImage(PLATEN.lucht, cx, 0, viewW, 1080);
-    PLATEN.stroken.forEach((img, i) => ctx.drawImage(img, strookX(cam, STROKEN[i][1]), 0));
+    const { onder, mate } = luchtStand(S.cam.lucht);
+    ctx.drawImage(PLATEN.lucht[onder], cx, 0, 1920, 1080);
+    if (mate > 0.001) { ctx.globalAlpha = mate; ctx.drawImage(PLATEN.lucht[onder + 1], cx, 0, 1920, 1080); ctx.globalAlpha = 1; }
+    for (const naam of LAGEN) {
+      for (let k = 0; k < AANTAL; k++) {
+        const sx = schermX(k) - S.cam[naam];         // plek op het scherm
+        if (sx < 1920 && sx + 1920 > 0) ctx.drawImage(PLATEN[naam][k], cx + sx, 0);
+      }
+    }
     ctx.restore();
   }
   // voorgrond
@@ -337,6 +350,7 @@ function setMode(m) {
   if (m === "3d") ensure3D();
 }
 function setOverview(v) {
+  if (S.overview && !v) { S.cam.zet(S.x); S.cam.z = 1; }
   S.overview = v; $("bwereld").classList.toggle("aan", v);
   if (r3d) r3d.setOverview(v);
 }

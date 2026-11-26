@@ -1,12 +1,13 @@
 // Semi-3D weergave van dezelfde wereld.
 // - Grond, gras, water, ravijn, decor, tutorialblokken en tekeningen zijn Blender-modellen (models/).
-// - Start en tutorial: een grijs beeld per scherm. Levels: lucht en drie doorlopende stroken met parallax.
+// - Start en tutorial: een grijs beeld per scherm. Levels: per scherm een lucht en drie lagen die tijdens het
+//   doorschuiven van de camera na elkaar aankomen (zie wereld.js).
 // - De camera kantelt niet: ze staat schuin boven/rechts en het beeld wordt teruggeschoven (off-axis).
 // Tekenvolgorde: achtergrond, speelvlak (met collageschaduw), papierrand en Krabbel.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { LEVELS_VANAF, BEGIN, STROKEN, strookX } from "./wereld.js";
+import { LEVELS_VANAF, AANTAL, schermX, luchtStand, LAGEN } from "./wereld.js";
 
 const FOV = 40;
 const Dc = 540 / Math.tan((FOV / 2) * Math.PI / 180); // afstand waarop 1 px op z=0 precies 1 scherm-px is
@@ -91,11 +92,25 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
     const m = plane(achtergrond, makeTex(img), wereld.scherm + 1, 1080, i * wereld.scherm + wereld.scherm / 2, 540, 0, 0);
     m.material.transparent = false;
   });
-  // levels: lucht (staat stil) en drie stroken die trager schuiven. De schaduwen zitten al in de beelden uit Figma,
-  // dus de stroken liggen op z = 0 en worden per beeld op hun plaats geschoven.
-  const lucht = plane(verte, makeTex(platen.lucht), 1920, 1080, 0, 540, 0, 0);
-  const lagen = platen.stroken.map((img, i) => ({ r: STROKEN[i][1], w: img.width, m: plane(verte, makeTex(img), img.width, 1080, 0, 540, 0, i + 1) }));
-  const heel = plane(verte, makeTex(platen.overzicht), platen.overzicht.width, 1080, LEVELS_VANAF + platen.overzicht.width / 2, 540, 0, 5);
+  // levels: per scherm een lucht en drie lagen. De schaduwen zitten al in de beelden uit Figma, dus ze liggen op
+  // z = 0 en worden per beeld op hun plaats geschoven.
+  const perScherm = (naam, order) => platen[naam].map((img) => plane(verte, makeTex(img), 1920, 1080, 0, 540, 0, order));
+  const luchten = perScherm("lucht", 0);
+  const lagen = LAGEN.map((naam, i) => ({ naam, m: perScherm(naam, i + 2) }));
+  function zetVerte(cam, heel) {
+    const { onder, mate } = luchtStand(cam.lucht);
+    luchten.forEach((m, k) => {
+      m.visible = heel || k === onder || (k === onder + 1 && mate > 0.001);
+      m.renderOrder = k === onder + 1 ? 1 : 0;
+      m.material.opacity = !heel && k === onder + 1 ? mate : 1;
+      m.position.x = (heel ? schermX(k) : cam.x) + 960;
+    });
+    lagen.forEach(({ naam, m }) => m.forEach((p, k) => {
+      const sx = heel ? 0 : schermX(k) - cam[naam];       // plek op het scherm
+      p.visible = heel || (sx < 1920 && sx + 1920 > 0);
+      p.position.x = (heel ? schermX(k) : cam.x + sx) + 960;
+    }));
+  }
 
   // ------------------------------------------------------------ logo, papierrand, Krabbel
   const logo = plane(speel, null, platen.logo[0].width, platen.logo[0].height,
@@ -222,10 +237,7 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
     renderer.setRenderTarget(null);
     renderer.setClearColor(0xffffff, 1); renderer.clear();
     renderer.render(achtergrond, camera);
-    lucht.visible = !overview; lagen.forEach((l) => { l.m.visible = !overview; }); heel.visible = overview;
-    const cam = Math.max(BEGIN, S.cam.x);
-    lucht.position.x = S.cam.x + 960;
-    lagen.forEach((l) => { l.m.position.x = strookX(cam, l.r) + l.w / 2; });
+    zetVerte(S.cam, overview);
     if (overview) renderer.render(verte, camera);
     else if (S.cam.x + 1920 > LEVELS_VANAF) { // enkel rechts van de papierrand
       const links = Math.max(0, ((LEVELS_VANAF - S.cam.x) / 1920) * w);
