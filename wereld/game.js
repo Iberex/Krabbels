@@ -171,6 +171,7 @@ const S = {
   x: level.spawn.x, y: 0, vx: 0, vy: 0, onGround: false, face: 1,
   t: 0, coyote: 0, buffer: 0, jumpHeld: false, anim: 0,
   safeX: level.spawn.x, safeY: null, won: false, flash: 0, ladder: null,
+  diepte: 0, // 3D: hoe ver de Krabbel naar voren staat (0 = midden van het platform)
   front: 0, frontDoel: 0, // tot waar de wereld ingekleurd is
   cam: { x: 0, z: 1 }, mode: "2d", overview: false,
 };
@@ -258,8 +259,13 @@ function update(dt) {
   einde(dt);
 }
 
-// na elke stap: inkleuren, deur, voortgangsbalk
+// na elke stap: diepte, inkleuren, deur, voortgangsbalk
+const LADDER_DIEPTE = 72;
 function einde(dt = 1 / 60) {
+  // de Krabbel loopt in het midden van de platformen; aan de voet van een ladder komt die naar voren,
+  // want in het midden staat daar het hoge blok
+  const bijBlok = (level.vlakken || []).some((v) => v.achterTot && S.x > v.x0 - 130 && S.x < v.achterTot + 10 && S.y > v.y + 6);
+  S.diepte += ((bijBlok ? LADDER_DIEPTE : 0) - S.diepte) * Math.min(1, dt * 7);
   // inkleuren langs het pad (kleur blijft, ook als je terugloopt)
   if (SAMEN) {
     S.frontDoel = Math.max(S.frontDoel, S.won ? W + 600 : S.x + VOOR);

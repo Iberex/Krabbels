@@ -11,7 +11,7 @@ W_DIR = os.path.dirname(os.path.abspath(__file__))
 out = W_DIR + "/assets/F"
 os.makedirs(out, exist_ok=True)
 BREEDTE = 17280
-LEVEL1_X = 7620          # zo ver schuift level 1 op in final_foreground
+LEVEL1_X = 7650          # zo ver schuiven de modellen van level 1 op (gras begint in Figma op x 7650)
 
 
 def vrij(naam):

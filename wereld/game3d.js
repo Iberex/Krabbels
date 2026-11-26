@@ -263,11 +263,11 @@ export async function create({ canvas, delen, W, grens, platen, spriteSize }) {
     resize();
     if (logo) logo.m.material.map = logo.tex[wiggle];
     if (spriteCanvas !== lastSprite) { spriteTex.image = spriteCanvas; spriteTex.needsUpdate = true; lastSprite = spriteCanvas; }
-    krabbel.position.set(S.x, Y3(S.y - FEET_Y + SP_H / 2), 16);
+    krabbel.position.set(S.x, Y3(S.y - FEET_Y + SP_H / 2), S.diepte);
     krabbel.scale.x = S.face;
-    krabbelSchaduw.position.set(krabbel.position.x + 3, krabbel.position.y - 7, 16);
+    krabbelSchaduw.position.set(krabbel.position.x + 3, krabbel.position.y - 7, S.diepte);
     krabbelSchaduw.scale.x = S.face;
-    shadow.position.set(S.x, Y3(S.y) + 1.5, 16);
+    shadow.position.set(S.x, Y3(S.y) + 1.5, S.diepte);
     shadow.visible = S.onGround;
     const xc = S.cam.x + 960;
     backdrops.forEach((m) => { m.position.x = overview ? W / 2 : xc; });
