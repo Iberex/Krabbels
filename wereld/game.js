@@ -17,6 +17,7 @@ const C = {
   coyote: 0.09,
   buffer: 0.11,
   step: 40,          // verschil dat je zonder springen mag oplopen
+  hoogte: 126,       // van voeten tot kruin van de Krabbel
   halfW: 26,
   minX: 90,          // onzichtbare muur links, zodat je niet voorbij het begin van de wereld loopt
   fallDeath: 1250,
@@ -29,7 +30,7 @@ const loadImg = (src) => new Promise((res, rej) => {
 });
 
 const AANTAL_LEVELS = 5;
-const LVL = Math.max(1, Math.min(AANTAL_LEVELS, parseInt(new URLSearchParams(location.search).get("level")) || 1));
+const LVL = Math.max(0, Math.min(AANTAL_LEVELS, parseInt(new URLSearchParams(location.search).get("level")) || 0)); // 0 = tutorial
 const level = await (await fetch(`level${LVL}.json`)).json();
 const dir = `assets/L${LVL}/`;
 document.title = `Krabbels · ${level.naam}`;
@@ -154,6 +155,11 @@ function update(dt) {
   const ex = nx + Math.sign(S.vx) * C.halfW;
   const wall = topAt(ex);
   if (S.vx !== 0 && wall !== -1 && wall < S.y - C.step) { nx = S.x; S.vx = 0; }
+  // hangende blokken (tutorial): daar kan je onderdoor, maar niet doorheen springen
+  for (const p of level.plafond || []) {
+    const erin = (x) => x + C.halfW > p.x0 && x - C.halfW < p.x1;
+    if (erin(nx) && !erin(S.x) && S.y - C.hoogte < p.y - 1) { nx = S.x; S.vx = 0; }
+  }
   S.x = nx;
   // springen
   const jumpDown = !S.overview && !S.won && (keys.ArrowUp || keys.Space || keys.KeyW_ || false);
@@ -167,6 +173,9 @@ function update(dt) {
   const prevY = S.y;
   S.vy += C.gravity * dt;
   S.y += S.vy * dt;
+  for (const p of level.plafond || []) {
+    if (S.vy < 0 && S.x + C.halfW > p.x0 && S.x - C.halfW < p.x1 && S.y - C.hoogte < p.y) { S.y = p.y + C.hoogte; S.vy = 0; }
+  }
   const g = groundAt(S.x);
   if (g !== -1 && S.vy >= 0 && S.y >= g && prevY <= g + 26) { S.y = g; S.vy = 0; S.onGround = true; }
   else if (g !== -1 && S.onGround && Math.abs(S.y - g) < 16) { S.y = g; S.vy = 0; }
@@ -180,7 +189,7 @@ function update(dt) {
   if (!S.won && S.onGround && S.x >= eind) {
     S.won = true;
     const volgende = LVL < AANTAL_LEVELS;
-    melding.innerHTML = `Level ${LVL} klaar!<small>${volgende ? `Druk op Enter voor level ${LVL + 1}` : "Dat was het laatste level"} · R = opnieuw</small>`;
+    melding.innerHTML = `${LVL ? `Level ${LVL}` : "Tutorial"} klaar!<small>${volgende ? `Druk op Enter voor level ${LVL + 1}` : "Dat was het laatste level"} · R = opnieuw</small>`;
     melding.hidden = false;
   }
   $("vbalk").style.width = Math.min(100, (S.x / (eind + 40)) * 100) + "%";
@@ -288,7 +297,7 @@ addEventListener("keydown", (e) => {
   if (e.code === "KeyW") setOverview(!S.overview);
   if (e.code === "KeyR") restart();
   if (e.code === "Enter" && S.won && LVL < AANTAL_LEVELS) naarLevel(LVL + 1);
-  if (/^Digit[1-9]$/.test(e.code) && +e.code.slice(5) <= AANTAL_LEVELS) naarLevel(+e.code.slice(5));
+  if (/^Digit[0-9]$/.test(e.code) && +e.code.slice(5) <= AANTAL_LEVELS) naarLevel(+e.code.slice(5));
 });
 addEventListener("keyup", (e) => { keys[e.code] = false; });
 addEventListener("blur", () => { for (const k in keys) keys[k] = false; });

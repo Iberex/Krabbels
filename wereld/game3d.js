@@ -55,15 +55,16 @@ export async function create({ canvas, IMG, level, nummer, W, spriteSize }) {
   // ------------------------------------------------------------ alle modellen uit Blender
   // in de glb: 100 px = 1 m, X = wereld-x, Y = 1080 - y, voorkant = +Z -> dus gewoon 100x vergroten
   const lader = new GLTFLoader();
-  const namen = ["grond", "gras", "water", "ravijn", "decor"];
+  const namen = level.modellen || ["grond", "gras", "water", "ravijn", "decor"]; // tutorial: voorgrond + decor
   const modellen = await Promise.all(namen.map((n) => lader.loadAsync(`models/${n}_level${nummer}.glb`)
     .catch((e) => { if (n === "water" || n === "ravijn") return null; throw e; }))); // niet elk level heeft water of een ravijn
   modellen.forEach((m) => { if (m) { m.scene.scale.setScalar(100); speel.add(m.scene); } });
+  const model = Object.fromEntries(namen.map((n, i) => [n, modellen[i]]));
   // donkere bodem onder elk ravijn, zodat de lucht er niet doorschemert
   const bodems = [];
-  if (modellen[3]) {
-    modellen[3].scene.updateMatrixWorld(true);
-    modellen[3].scene.children.forEach((c) => {
+  if (model.ravijn) {
+    model.ravijn.scene.updateMatrixWorld(true);
+    model.ravijn.scene.children.forEach((c) => {
       const box = new THREE.Box3().setFromObject(c);
       const bodem = new THREE.Mesh(new THREE.PlaneGeometry(box.max.x - box.min.x - 4, 440), new THREE.MeshBasicMaterial({ color: 0x362419, toneMapped: false }));
       bodem.position.set((box.min.x + box.max.x) / 2, -214, box.min.z + 2);
@@ -81,7 +82,7 @@ export async function create({ canvas, IMG, level, nummer, W, spriteSize }) {
   const ontwerp = { 8: { b: level.bg[2], d: 120 }, 9: { b: level.bg[1], d: 260 }, 10: { b: level.bg[0], d: 420 } };
   const lagen = [];
   const knopen = [];
-  modellen[4].scene.traverse((o) => { const m = /laag(\d+)$/.exec(o.name); if (m && !o.isMesh) knopen.push([o, +m[1]]); });
+  model.decor.scene.traverse((o) => { const m = /laag(\d+)$/.exec(o.name); if (m && !o.isMesh) knopen.push([o, +m[1]]); });
   const fo = level.frameOffset;
   knopen.forEach(([knoop, nr]) => {
     const info = ontwerp[nr];
