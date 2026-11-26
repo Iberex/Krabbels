@@ -53,23 +53,28 @@ def wiebel(beeld, zaad, sterkte=2.4, cel=13):
 for i in range(3):
     Image.fromarray(wiebel(logo, 11 + i * 977)).save(f"{out}/logo_{i}.png", optimize=True)
 
-# ondergrond: tutorialblokken (x, y, breedte) + de ondergrond van level 1, 7620 px opgeschoven
-BLOKKEN = [(0, 975, 1920), (1920, 975, 570), (2790, 975, 570), (3660, 855, 570), (4530, 975, 2610),
-           (6840, 735, 840), (5160, 765, 180)]
-l1 = json.load(open(W_DIR + "/level1.json"))
-top = []
-for x in range(0, BREEDTE, 2):
-    y = [by for bx, by, bw in BLOKKEN if bx <= x < bx + bw]
-    i = (x - LEVEL1_X) // 2
-    if 15 <= i < len(l1["top"]) and l1["top"][i] != -1:
-        y.append(l1["top"][i])
-    top.append(min(y) if y else -1)
-json.dump({"naam": "Krabbels · level 1", "breedte": BREEDTE, "hoogte": 1080, "camMin": 0, "stap": 2,
+# ---------------------------------------------------------------- waar je kan staan (x0, x1, loopvlak)
+# "achterTot": een hoog blok dat achter een lager platform begint (daar staat de ladder voor);
+# tot die x is het geen muur, zodat je eronder kan doorlopen naar de ladder.
+VLAKKEN = [
+    # tutorial
+    {"x0": 0, "x1": 1920, "y": 975}, {"x0": 1920, "x1": 2490, "y": 975}, {"x0": 2790, "x1": 3360, "y": 975},
+    {"x0": 3660, "x1": 4230, "y": 855}, {"x0": 4530, "x1": 7140, "y": 975}, {"x0": 5160, "x1": 5340, "y": 765},
+    {"x0": 6840, "x1": 7680, "y": 735, "achterTot": 7140},
+    # level 1
+    {"x0": 7650, "x1": 8250, "y": 735}, {"x0": 8550, "x1": 10470, "y": 735},
+    {"x0": 10170, "x1": 12090, "y": 495, "achterTot": 10470}, {"x0": 12390, "x1": 14010, "y": 615},
+    {"x0": 14310, "x1": 14730, "y": 615}, {"x0": 15030, "x1": 16950, "y": 735},
+    {"x0": 16650, "x1": 17280, "y": 495, "achterTot": 16950},
+]
+# de tekeningen waar je over loopt of klimt
+BRUGGEN = [{"x": 2490, "y": 975}, {"x": 8250, "y": 735}, {"x": 14010, "y": 615}]          # 300 breed, 60 hoog
+HELLINGEN = [[3360, 975, 3660, 855], [4230, 855, 4530, 975], [12090, 495, 12390, 615], [14730, 615, 15030, 735]]
+LADDERS = [{"x": 6985, "boven": 735, "onder": 975}, {"x": 10315, "boven": 495, "onder": 735},
+           {"x": 16795, "boven": 495, "onder": 735}]
+json.dump({"naam": "Krabbels · level 1", "breedte": BREEDTE, "hoogte": 1080, "camMin": 0,
            "spawn": {"x": 150}, "overgang": 7660, "level1x": LEVEL1_X, "deur": {"x0": 16950, "x1": 17130},
-           "tegels": 9, "tegelBreedte": 1920, "top": top},
+           "tegels": 9, "tegelBreedte": 1920, "vlakken": VLAKKEN, "bruggen": BRUGGEN, "hellingen": HELLINGEN,
+           "ladders": LADDERS},
           open(W_DIR + "/final.json", "w"), separators=(",", ":"))
-gaten, s = [], None
-for i, t in enumerate(top + [0]):
-    if t == -1 and s is None: s = i * 2
-    if t != -1 and s is not None: gaten.append((s, i * 2)); s = None
-print("gaten", gaten)
+print("final.json geschreven")
