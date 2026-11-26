@@ -288,6 +288,8 @@ function draw2D() {
       for (let i = 0; i < level.tegels; i++) if (i * T < cx + viewW && (i + 1) * T > cx) ctx.drawImage(soort[i], i * T, 0);
     }
   }
+  // laagvolgorde: wereld < tekenlijnen/ankers < papierrand < Krabbel
+  if (SAMEN) ctx.drawImage(PLATEN.rand, PLATEN.randPlek.x, PLATEN.randPlek.y);
   // Krabbel
   const spr = krabbelSprite(wiggleVariant(), legFrame());
   const sc = S.overview ? Math.max(1, 0.55 / z) : 1;
@@ -297,7 +299,6 @@ function draw2D() {
   if (S.flash > 0) ctx.globalAlpha = 0.5 + 0.5 * Math.sin(S.t * 50);
   ctx.drawImage(spr, -FEET_X, -FEET_Y);
   ctx.restore();
-  if (SAMEN) ctx.drawImage(PLATEN.rand, PLATEN.randPlek.x, PLATEN.randPlek.y); // de Krabbel loopt achter de papierrand door
 }
 
 // ---------------------------------------------------------------- 3D (lui geladen)

@@ -158,10 +158,11 @@ export async function create({ canvas, delen, W, grens, platen, spriteSize }) {
       if (m && (kleur || snij)) m.scene.traverse((o) => { if (o.isMesh) bewerk(o.material, { kleur, snij }); });
     });
   }
+  // Na het speelvlak wordt nog een laag getekend die altijd bovenop ligt: de papierrand en daarboven de Krabbel.
+  const boven = new THREE.Scene();
+
   // -------------------------------------------------------- platte stukken uit Figma: logo en papierrand
   // Ze liggen op het speelvlak (z = 0) en vallen zo exact samen met het ontwerp. Hun schaduw zit al in de PNG.
-  // De papierrand wordt als allerlaatste getekend, boven alles.
-  const boven = new THREE.Scene();
   let logo = null;
   if (platen) {
     const plaat = (scene, img, x, y, order) =>
@@ -186,8 +187,10 @@ export async function create({ canvas, delen, W, grens, platen, spriteSize }) {
   let lastSprite = null;
   const spriteTex = new THREE.CanvasTexture(document.createElement("canvas"));
   spriteTex.colorSpace = THREE.SRGBColorSpace;
-  const krabbel = plane(speel, spriteTex, SP_W, SP_H, 0, 0, 4, 4, true);
-  krabbel.material.depthWrite = true; krabbel.material.alphaTest = 0.5;
+  // de Krabbel is de bovenste laag (karakters boven tekenlijnen, ankers en decor), met een eigen collageschaduw
+  const krabbelSchaduw = plane(boven, spriteTex, SP_W, SP_H, 0, 0, 16, 2);
+  krabbelSchaduw.material.color.set(0x000000); krabbelSchaduw.material.opacity = 0.2;
+  const krabbel = plane(boven, spriteTex, SP_W, SP_H, 0, 0, 16, 3);
 
   // ------------------------------------------------------------ collageschaduw (zoals in Figma)
   // Het speelvlak gaat eerst naar een tussenbeeld met diepte. Daarna krijgt elke pixel schaduw als er iets
@@ -262,6 +265,8 @@ export async function create({ canvas, delen, W, grens, platen, spriteSize }) {
     if (spriteCanvas !== lastSprite) { spriteTex.image = spriteCanvas; spriteTex.needsUpdate = true; lastSprite = spriteCanvas; }
     krabbel.position.set(S.x, Y3(S.y - FEET_Y + SP_H / 2), 16);
     krabbel.scale.x = S.face;
+    krabbelSchaduw.position.set(krabbel.position.x + 3, krabbel.position.y - 7, 16);
+    krabbelSchaduw.scale.x = S.face;
     shadow.position.set(S.x, Y3(S.y) + 1.5, 16);
     shadow.visible = S.onGround;
     const xc = S.cam.x + 960;
