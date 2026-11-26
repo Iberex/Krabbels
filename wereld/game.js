@@ -2,7 +2,7 @@
 // De wereld = het Figma-frame "final_foreground": 9 schermen van 1920 px (start, tutorial, level 1-5),
 // elk met zijn eigen achtergrond. Platformen en tekeningen komen uit wereld.json (maak_wereld.py).
 // Besturing: pijltjes, spatie = springen, ↑↓ = ladder.
-import { lijnen, anker, tekenGids, tekenAnker } from "./wereld.js";
+import { lijnen, anker, tekenGids, tekenAnker, LEVELS_VANAF, BEGIN, STROKEN, strookX, overzicht } from "./wereld.js";
 
 const $ = (id) => document.getElementById(id);
 const c2d = $("c2d"), ctx = c2d.getContext("2d");
@@ -33,6 +33,7 @@ const loadImg = (src) => new Promise((res, rej) => {
 const json = async (pad) => (await fetch(pad)).json();
 const reeks = (map, naam, n) => Promise.all(Array.from({ length: n }, (_, i) => loadImg(`${map}/${naam}_${i}.png`)));
 
+const reeks0 = (n) => Promise.all(Array.from({ length: n }, (_, i) => loadImg(`assets/achtergrond/scherm_${i}.jpg`)));
 const wereld = await json("wereld.json");
 const W = wereld.breedte, RAND = wereld.rand, SCHERM = wereld.scherm;
 const gevraagd = Math.max(0, Math.min(wereld.levels.length, parseInt(new URLSearchParams(location.search).get("level")) || 0));
@@ -40,12 +41,13 @@ const gevraagd = Math.max(0, Math.min(wereld.levels.length, parseInt(new URLSear
 // start en tutorial (platte stukken uit final_foreground) en de voorgrond van de levels (grond, gras, water,
 // ravijnen, potloden, deur)
 const level1 = await json("level1.json");
-const [achtergronden, blok, logo, rand, achter, grond] = await Promise.all([
-  Promise.all(Array.from({ length: wereld.schermen }, (_, i) => loadImg(`assets/achtergrond/scherm_${i}.jpg`))),
+const [achtergronden, lucht, stroken, blok, logo, rand, achter, grond] = await Promise.all([
+  reeks0(4), loadImg("assets/achtergrond/lucht.jpg"),                 // start en tutorial: een beeld per scherm
+  Promise.all(STROKEN.map(([naam]) => loadImg(`assets/achtergrond/${naam}`))),
   reeks("assets/F", "blok", 4), reeks("assets/F", "logo", 3), loadImg("assets/F/rand.png"),
   reeks("assets/L1", "achter", level1.tegels), reeks("assets/L1", "grond", level1.tegels),
 ]);
-const PLATEN = { achtergronden, logo, rand, logoPlek: { x: 320, y: 200 }, randPlek: { x: RAND - 60, y: 0 } };
+const PLATEN = { achtergronden, lucht, stroken, overzicht: overzicht(lucht, stroken), logo, rand, logoPlek: { x: 320, y: 200 }, randPlek: { x: RAND - 60, y: 0 } };
 document.title = "Krabbels · de wereld";
 
 // ---------------------------------------------------------------- waar je kan staan
@@ -275,8 +277,17 @@ function draw2D() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, c2d.width, c2d.height);
   ctx.setTransform(z, 0, 0, z, -cx * z, -cy * z);
-  // elk scherm van 1920 px heeft zijn eigen achtergrond
+  // start en tutorial: grijs papier per scherm
   PLATEN.achtergronden.forEach((img, i) => { if (inBeeld(i * SCHERM, SCHERM)) ctx.drawImage(img, i * SCHERM, 0, SCHERM + 1, 1080); });
+  // levels: lucht die stilstaat met daarvoor drie stroken die trager schuiven (diepte)
+  if (S.overview) ctx.drawImage(PLATEN.overzicht, LEVELS_VANAF, 0);
+  else if (cx + viewW > LEVELS_VANAF) {
+    ctx.save(); ctx.beginPath(); ctx.rect(LEVELS_VANAF, cy, W, viewH); ctx.clip();
+    const cam = Math.max(BEGIN, cx);
+    ctx.drawImage(PLATEN.lucht, cx, 0, viewW, 1080);
+    PLATEN.stroken.forEach((img, i) => ctx.drawImage(img, strookX(cam, STROKEN[i][1]), 0));
+    ctx.restore();
+  }
   // voorgrond
   blok.forEach((t, i) => { if (inBeeld(i * SCHERM, SCHERM)) ctx.drawImage(t, i * SCHERM, 0); });
   if (inBeeld(0, SCHERM)) ctx.drawImage(PLATEN.logo[wiggle()], PLATEN.logoPlek.x, PLATEN.logoPlek.y); // zelfde wiggle als de Krabbel

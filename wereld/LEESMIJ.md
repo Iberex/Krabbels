@@ -11,8 +11,8 @@ R = opnieuw, 0 = begin, 1-5 = bij dat level beginnen (ook `?level=3&3d`).
 
 Bestanden
 - `maak_wereld.py` -> `wereld.json`: platformen, bruggen, hellingen, ladders, ankers (de wereld = Figma `final_foreground`, 17280 px)
-- `assets/achtergrond/scherm_0..8.jpg`: een achtergrond per scherm van 1920 px (Title Screen, 3 x tutorial_level,
-  level_1..5_final zonder voorgrond)
+- `assets/achtergrond/`: `scherm_0..3.jpg` (start en tutorial), `lucht.jpg` en `laag10/9/8.png` (levels, met parallax;
+  uit het Figma-sjabloon "achtergrondstroken", formules in `wereld.js`)
 - `assets/F/` (start, tutorial, logo met 3 wiggle-versies, papierrand) en `assets/L1/` (voorgrond van de levels)
 - `game.js` (spel + 2D), `game3d.js` (semi-3D), `wereld.js` (tekeningen en ankers)
 - `models/`: Blender-modellen; maken met de scripts in `3-design/assets/glb/` (`bouw_gidsen.py` leest `wereld.json`)

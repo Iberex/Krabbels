@@ -1,11 +1,12 @@
 // Semi-3D weergave van dezelfde wereld.
 // - Grond, gras, water, ravijn, decor, tutorialblokken en tekeningen zijn Blender-modellen (models/).
-// - De achtergrond is per scherm van 1920 px één plat beeld uit Figma en scrolt mee met de wereld.
+// - Start en tutorial: een grijs beeld per scherm. Levels: lucht en drie doorlopende stroken met parallax.
 // - De camera kantelt niet: ze staat schuin boven/rechts en het beeld wordt teruggeschoven (off-axis).
 // Tekenvolgorde: achtergrond, speelvlak (met collageschaduw), papierrand en Krabbel.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { LEVELS_VANAF, BEGIN, STROKEN, strookX } from "./wereld.js";
 
 const FOV = 40;
 const Dc = 540 / Math.tan((FOV / 2) * Math.PI / 180); // afstand waarop 1 px op z=0 precies 1 scherm-px is
@@ -17,7 +18,7 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.autoClear = false;
-  const achtergrond = new THREE.Scene(), speel = new THREE.Scene(), boven = new THREE.Scene();
+  const achtergrond = new THREE.Scene(), verte = new THREE.Scene(), speel = new THREE.Scene(), boven = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(FOV, 16 / 9, 200, 90000);
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
   const Y3 = (y) => 1080 - y; // Figma-y (omlaag) -> three-y (omhoog)
@@ -85,11 +86,16 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
     levels.add(m);
   }
 
-  // elk scherm van 1920 px heeft zijn eigen achtergrond; ze liggen op z = 0 en scrollen gewoon mee
+  // start en tutorial: grijs papier per scherm
   platen.achtergronden.forEach((img, i) => {
     const m = plane(achtergrond, makeTex(img), wereld.scherm + 1, 1080, i * wereld.scherm + wereld.scherm / 2, 540, 0, 0);
     m.material.transparent = false;
   });
+  // levels: lucht (staat stil) en drie stroken die trager schuiven. De schaduwen zitten al in de beelden uit Figma,
+  // dus de stroken liggen op z = 0 en worden per beeld op hun plaats geschoven.
+  const lucht = plane(verte, makeTex(platen.lucht), 1920, 1080, 0, 540, 0, 0);
+  const lagen = platen.stroken.map((img, i) => ({ r: STROKEN[i][1], w: img.width, m: plane(verte, makeTex(img), img.width, 1080, 0, 540, 0, i + 1) }));
+  const heel = plane(verte, makeTex(platen.overzicht), platen.overzicht.width, 1080, LEVELS_VANAF + platen.overzicht.width / 2, 540, 0, 5);
 
   // ------------------------------------------------------------ logo, papierrand, Krabbel
   const logo = plane(speel, null, platen.logo[0].width, platen.logo[0].height,
@@ -216,6 +222,17 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
     renderer.setRenderTarget(null);
     renderer.setClearColor(0xffffff, 1); renderer.clear();
     renderer.render(achtergrond, camera);
+    lucht.visible = !overview; lagen.forEach((l) => { l.m.visible = !overview; }); heel.visible = overview;
+    const cam = Math.max(BEGIN, S.cam.x);
+    lucht.position.x = S.cam.x + 960;
+    lagen.forEach((l) => { l.m.position.x = strookX(cam, l.r) + l.w / 2; });
+    if (overview) renderer.render(verte, camera);
+    else if (S.cam.x + 1920 > LEVELS_VANAF) { // enkel rechts van de papierrand
+      const links = Math.max(0, ((LEVELS_VANAF - S.cam.x) / 1920) * w);
+      renderer.setScissor(links, 0, w - links, h); renderer.setScissorTest(true);
+      renderer.render(verte, camera);
+      renderer.setScissorTest(false);
+    }
     renderer.setRenderTarget(doel);
     renderer.setClearColor(0x000000, 0); renderer.clear();
     renderer.render(speel, camera);

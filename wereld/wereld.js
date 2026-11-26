@@ -84,3 +84,24 @@ function krijt(ctx, punten, zaad) {
   }
   ctx.restore();
 }
+
+// ---------------------------------------------------------------- achtergrond van de levels (parallax)
+// Doorlopende stroken uit het Figma-sjabloon. Een strook met snelheid r is 1920 + r x 9600 px breed; wanneer de
+// camera precies op level N staat, zie je ze vanaf x = N x r x 1920 (de gekleurde vensters in Figma).
+export const LEVELS_VANAF = 7680;          // links hiervan: start en tutorial
+export const BEGIN = LEVELS_VANAF - 1920;  // camerastand waarop de stroken beginnen te schuiven
+export const STROKEN = [["laag10.png", 0.1], ["laag9.png", 0.3], ["laag8.png", 0.5]];
+// waar de linkerkant van een strook staat (in wereld-px) bij camerastand cam
+export const strookX = (cam, r) => (1 - r) * cam + r * BEGIN;
+
+// voor "hele wereld": de vijf levelschermen naast elkaar, elk zoals je het ziet als de camera erop staat
+export function overzicht(lucht, stroken) {
+  const cv = document.createElement("canvas"); cv.width = 5 * 1920; cv.height = 1080;
+  const g = cv.getContext("2d");
+  for (let n = 1; n <= 5; n++) {
+    const x = (n - 1) * 1920;
+    g.drawImage(lucht, x, 0, 1920, 1080);
+    stroken.forEach((img, i) => g.drawImage(img, n * STROKEN[i][1] * 1920, 0, 1920, 1080, x, 0, 1920, 1080));
+  }
+  return cv;
+}
