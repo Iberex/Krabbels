@@ -144,3 +144,32 @@ export function luchtStand(camLucht) {
   return { onder: Math.floor(pos), mate: pos - Math.floor(pos) };
 }
 export const LAGEN = ["l10", "l9", "l8"];        // van ver naar dichtbij
+
+// ---------------------------------------------------------------- tutorial: grijze blokken (Figma "tutorial_level")
+// Drie lagen papieren blokken. De camera volgt hier de Krabbel, dus ze mogen echt diepte hebben: hoe verder, hoe
+// trager. Elk blok staat op zijn ontworpen plek wanneer het midden in beeld is. De voorgrond van final_foreground
+// ligt 1920 px verder en 225 px lager dan in tutorial_level, dus de blokken ook.
+const LAGEN_TUT = [ // van ver naar dichtbij: [bestand, snelheid, [[x, breedte], ...]]
+  ["bg3", 0.65, [[1680, 910], [660, 345], [4977, 345]]],
+  ["bg2", 0.75, [[1280, 880], [2700, 810], [4216, 789]]],
+  ["bg1", 0.85, [[240, 1260], [2810, 1260], [4490, 1150]]],
+];
+export const BLOKKEN = LAGEN_TUT.flatMap(([laag, r, rij]) => rij.map(([x, w], k) => {
+  const X = x + SCHERM;
+  return { naam: `tut_${laag}_${k}.png`, r, x: X - 30, y: 225, camRef: klem(X + w / 2 - 960, 0, VOLG_MAX) };
+}));
+export const blokX = (b, cam) => b.x + (1 - b.r) * (Math.min(cam, VOLG_MAX) - b.camRef);   // vanaf de levels schuiven ze niet meer
+
+// ---------------------------------------------------------------- eindscherm (Figma "end_screen")
+// Eén vast scherm; de Krabbel komt uit de deur linksboven en kan er rondlopen.
+export const EIND = {
+  start: { x: 150, y: 447 },
+  // achterTot: een hoger platform dat achter het lagere ligt is geen muur (je kan eronderdoor)
+  vlakken: [
+    { x0: 0, x1: 790, y: 447, achterTot: 1920 }, { x0: 1072, x1: 1920, y: 562, achterTot: 1920 },
+    { x0: 0, x1: 572, y: 801 }, { x0: 870, x1: 1920, y: 801 },
+  ],
+  bruggen: [{ x: 570, y: 805 }],
+  hellingen: [[782, 450, 1080, 568]],
+  ladders: [{ x: 1567, boven: 562, onder: 801 }],
+};

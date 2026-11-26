@@ -2,7 +2,7 @@
 // De wereld = het Figma-frame "final_foreground": 9 schermen van 1920 px (start, tutorial, level 1-5),
 // elk met zijn eigen achtergrond. Platformen en tekeningen komen uit wereld.json (maak_wereld.py).
 // Besturing: pijltjes, spatie = springen, ↑↓ = ladder.
-import { lijnen, anker, tekenGids, tekenAnker, LEVELS_VANAF, AANTAL, schermX, maakCamera, luchtStand, LAGEN } from "./wereld.js";
+import { lijnen, anker, tekenGids, tekenAnker, LEVELS_VANAF, AANTAL, schermX, maakCamera, luchtStand, LAGEN, BLOKKEN, blokX, EIND } from "./wereld.js";
 
 const $ = (id) => document.getElementById(id);
 const c2d = $("c2d"), ctx = c2d.getContext("2d");
@@ -49,21 +49,23 @@ const [achtergronden, lucht, l10, l9, l8, blok, logo, rand, achter, grond] = awa
   reeks("assets/L1", "achter", level1.tegels), reeks("assets/L1", "grond", level1.tegels),
 ]);
 const PLATEN = { achtergronden, lucht, l10, l9, l8, logo, rand, logoPlek: { x: 320, y: 200 }, randPlek: { x: RAND - 60, y: 0 } };
+PLATEN.tut = await Promise.all(BLOKKEN.map((b) => loadImg(`assets/achtergrond/${b.naam}`)));
+PLATEN.eind = await loadImg("assets/achtergrond/eind.jpg");
 document.title = "Krabbels · de wereld";
 
 // ---------------------------------------------------------------- waar je kan staan
-const VLAKKEN = [
-  ...wereld.vlakken.map((v) => ({ x0: v.x0, x1: v.x1, achterTot: v.achterTot, blok: true, y: () => v.y })),
-  ...wereld.bruggen.map((b) => {
+const maakVlakken = (w) => [
+  ...w.vlakken.map((v) => ({ x0: v.x0, x1: v.x1, achterTot: v.achterTot, blok: true, y: () => v.y })),
+  ...w.bruggen.map((b) => {
     const p = lijnen.boog(b.x, b.y);
     return { x0: b.x, x1: b.x + 300, y: (x) => {
       const i = Math.max(1, p.findIndex((q) => q[0] >= x)), [x0, y0] = p[i - 1], [x1, y1] = p[i];
       return y0 + (y1 - y0) * Math.max(0, Math.min(1, (x - x0) / ((x1 - x0) || 1)));
     } };
   }),
-  ...wereld.hellingen.map(([ax, ay, bx, by]) => ({ x0: ax, x1: bx, y: (x) => ay + (by - ay) * ((x - ax) / (bx - ax)) })),
+  ...w.hellingen.map(([ax, ay, bx, by]) => ({ x0: ax, x1: bx, y: (x) => ay + (by - ay) * ((x - ax) / (bx - ax)) })),
 ];
-const LADDERS = wereld.ladders;
+let VLAKKEN = maakVlakken(wereld), LADDERS = wereld.ladders;
 // hoogste loopvlak op x dat niet boven "vanaf" ligt (je landt er enkel van bovenaf)
 const vlakOp = (x, vanaf) => {
   let best = -1;
@@ -156,6 +158,7 @@ const S = {
   t: 0, coyote: 0, buffer: 0, jumpHeld: false, anim: 0,
   safeX: spawnX, safeY: null, won: false, flash: 0, ladder: null,
   diepte: 0, // 3D: hoe ver de Krabbel naar voren staat (0 = midden van het platform)
+  eind: false, deur: 0, // op het eindscherm / bezig door de deur te gaan (seconden)
   cam: maakCamera(), mode: "2d", overview: false,
 };
 S.cam.zet(spawnX);
@@ -163,7 +166,25 @@ S.y = groundAt(S.x) - 300;
 const keys = {};
 const fit = c2d.width / W;
 
+function naarEind() {
+  S.eind = true; S.won = false; S.deur = 0;
+  VLAKKEN = maakVlakken(EIND); LADDERS = EIND.ladders;
+  S.x = S.safeX = EIND.start.x; S.y = S.safeY = EIND.start.y; S.vx = 0; S.vy = 0; S.ladder = null; S.face = 1; S.diepte = 0;
+  toonDoek();
+}
+function terugUitEind() {
+  S.eind = false; S.deur = 0; VLAKKEN = maakVlakken(wereld); LADDERS = wereld.ladders;
+  toonDoek();
+}
+// het eindscherm is een plat beeld: dat tekent altijd het 2D-doek
+function toonDoek() {
+  const d3 = S.mode === "3d" && !S.eind;
+  c2d.style.display = d3 ? "none" : "block";
+  c3d.style.display = d3 ? "block" : "none";
+}
+
 function respawn() {
+  if (S.eind) { S.x = EIND.start.x; S.y = EIND.start.y - 200; S.vx = 0; S.vy = 0; S.ladder = null; S.flash = 0.45; return; }
   let x = Math.max(150, S.safeX - C.respawnBack);
   while (groundAt(x) === -1 && x > 0) x -= 20;
   const vanaf = S.safeY === null ? -Infinity : S.safeY - 130; // niet op een hoger blok terechtkomen
@@ -173,6 +194,8 @@ function respawn() {
   S.x = x; S.y = grond - 260; S.vx = 0; S.vy = 0; S.ladder = null; S.flash = 0.45;
 }
 function restart() {
+  if (S.eind || S.deur) terugUitEind();
+  $("waas").style.opacity = 0;
   S.safeX = spawnX; S.safeY = null; S.ladder = null; S.won = false; melding.hidden = true;
   S.x = spawnX; S.y = groundAt(S.x) - 300; S.vx = 0; S.vy = 0; S.flash = 0.3;
   S.cam.zet(spawnX);
@@ -182,7 +205,7 @@ function update(dt) {
   S.t += dt;
   if (S.flash > 0) S.flash -= dt;
   if (S.overview || S.won) { S.vx *= 0.8; }
-  const vrij = !S.overview && !S.won;
+  const vrij = !S.overview && !S.won && !S.deur;
   const dirx = vrij ? (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0) : 0;
   if (dirx) S.face = dirx;
   // horizontaal
@@ -190,7 +213,7 @@ function update(dt) {
   const a = C.accel * dt;
   S.vx += Math.max(-a, Math.min(a, target - S.vx));
   let nx = S.x + S.vx * dt;
-  nx = Math.max(C.minX, Math.min(W - C.halfW, nx));
+  nx = Math.max(S.eind ? C.halfW + 14 : C.minX, Math.min((S.eind ? 1920 : W) - C.halfW, nx));
   if (S.vx !== 0 && muur(nx + Math.sign(S.vx) * C.halfW, S.y)) { nx = S.x; S.vx = 0; }
   S.x = nx;
   // ladder: pijl omhoog onderaan, pijl omlaag bovenaan
@@ -240,14 +263,15 @@ const eind = (wereld.deur.x0 + wereld.deur.x1) / 2 - 40;
 function einde(dt) {
   // de Krabbel loopt in het midden van de platformen; aan de voet van een ladder komt die naar voren,
   // want in het midden staat daar het hoge blok
-  const bijBlok = wereld.vlakken.some((v) => v.achterTot && S.x > v.x0 - 130 && S.x < v.achterTot + 10 && S.y > v.y + 6);
+  const bijBlok = !S.eind && wereld.vlakken.some((v) => v.achterTot && S.x > v.x0 - 130 && S.x < v.achterTot + 10 && S.y > v.y + 6);
   S.diepte += ((bijBlok ? LADDER_DIEPTE : 0) - S.diepte) * Math.min(1, dt * 7);
-  if (!S.won && S.onGround && S.x >= eind) {
-    S.won = true;
-    melding.innerHTML = "Door de deur!<small>De Krabbel is aan het einde van de wereld · R = opnieuw · 0 = naar het begin</small>";
-    melding.hidden = false;
+  // door de deur: de Krabbel stapt erin, alles wordt even wit en daar is het eindscherm
+  if (!S.eind && !S.deur && S.onGround && S.x >= eind) { S.deur = 0.001; S.won = false; $("waas").style.opacity = 1; }
+  if (S.deur) {
+    S.deur += dt; S.vx = 0;
+    if (S.deur > 0.75) { naarEind(); $("waas").style.opacity = 0; }
   }
-  $("vbalk").style.width = Math.min(100, (S.x / eind) * 100) + "%";
+  $("vbalk").style.width = (S.eind ? 100 : Math.min(100, (S.x / eind) * 100)) + "%";
 }
 
 function legFrame() {
@@ -266,7 +290,7 @@ function updateCamera(dt) {
     const t = (W - c2d.width / S.cam.z) / 2;
     S.cam.x += (t - S.cam.x) * Math.min(1, dt * 6);
     S.cam.l8 = S.cam.l9 = S.cam.l10 = S.cam.lucht = S.cam.x;
-  } else S.cam.stap(S.x, dt);
+  } else if (!S.eind) S.cam.stap(S.x, dt);
 }
 
 // ---------------------------------------------------------------- 2D tekenen
@@ -276,7 +300,25 @@ const GIDSEN = [
   ...wereld.ankers.map(([x, y]) => tekenAnker(...anker(wereld, x, y), x < RAND)),
 ];
 
+// de Krabbel; bij de deur wordt ze kleiner: ze gaat naar binnen
+function tekenKrabbel(schaal) {
+  const spr = krabbelSprite(wiggle(), legFrame());
+  const k = S.deur ? Math.max(0.25, 1 - S.deur) : 1;
+  ctx.save();
+  ctx.translate(S.x, S.y);
+  ctx.scale(S.face * schaal * k, schaal * k);
+  if (S.flash > 0) ctx.globalAlpha = 0.5 + 0.5 * Math.sin(S.t * 50);
+  ctx.drawImage(spr, -FEET_X, -FEET_Y);
+  ctx.restore();
+}
+
 function draw2D() {
+  if (S.eind) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(PLATEN.eind, 0, 0, 1920, 1080);
+    tekenKrabbel(1);
+    return;
+  }
   const z = S.cam.z, cx = S.cam.x, cy = 540 - 540 / z;
   const viewW = c2d.width / z, viewH = c2d.height / z;
   const inBeeld = (x, w) => x < cx + viewW && x + w > cx;
@@ -285,6 +327,10 @@ function draw2D() {
   ctx.setTransform(z, 0, 0, z, -cx * z, -cy * z);
   // start en tutorial: grijs papier per scherm
   PLATEN.achtergronden.forEach((img, i) => { if (inBeeld(i * SCHERM, SCHERM)) ctx.drawImage(img, i * SCHERM, 0, SCHERM + 1, 1080); });
+  BLOKKEN.forEach((b, i) => {
+    const x = S.overview ? b.x : blokX(b, cx), img = PLATEN.tut[i];
+    if (inBeeld(x, img.width)) ctx.drawImage(img, x, b.y);
+  });
   // levels: per scherm een lucht en drie lagen (zie wereld.js)
   if (S.overview) {
     for (let k = 0; k < AANTAL; k++) for (const naam of ["lucht", ...LAGEN]) ctx.drawImage(PLATEN[naam][k], schermX(k), 0);
@@ -310,14 +356,7 @@ function draw2D() {
   for (const s of GIDSEN) if (inBeeld(s.x, s.beeld.width)) ctx.drawImage(s.beeld, s.x, s.y);
   // laagvolgorde: wereld < tekeningen/ankers < papierrand < Krabbel
   ctx.drawImage(PLATEN.rand, PLATEN.randPlek.x, PLATEN.randPlek.y);
-  const spr = krabbelSprite(wiggle(), legFrame());
-  const sc = S.overview ? Math.max(1, 0.55 / z) : 1;
-  ctx.save();
-  ctx.translate(S.x, S.y);
-  ctx.scale(S.face * sc, sc);
-  if (S.flash > 0) ctx.globalAlpha = 0.5 + 0.5 * Math.sin(S.t * 50);
-  ctx.drawImage(spr, -FEET_X, -FEET_Y);
-  ctx.restore();
+  tekenKrabbel(S.overview ? Math.max(1, 0.55 / z) : 1);
 }
 
 // ---------------------------------------------------------------- 3D (lui geladen)
@@ -343,13 +382,13 @@ async function ensure3D() {
 
 function setMode(m) {
   S.mode = m;
-  c2d.style.display = m === "2d" ? "block" : "none";
-  c3d.style.display = m === "3d" ? "block" : "none";
+  toonDoek();
   $("b2d").classList.toggle("aan", m === "2d");
   $("b3d").classList.toggle("aan", m === "3d");
   if (m === "3d") ensure3D();
 }
 function setOverview(v) {
+  if (S.eind) return;
   if (S.overview && !v) { S.cam.zet(S.x); S.cam.z = 1; }
   S.overview = v; $("bwereld").classList.toggle("aan", v);
   if (r3d) r3d.setOverview(v);
@@ -377,10 +416,11 @@ function frame(now) {
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
   update(dt);
   updateCamera(dt);
-  if (S.mode === "2d") draw2D();
+  if (S.mode === "2d" || S.eind) draw2D();
   else if (r3d) r3d.render(S, krabbelSprite(wiggle(), legFrame()), wiggle());
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 if (new URLSearchParams(location.search).has("3d")) setMode("3d");
-window.__krabbels = { S, wereld, setMode, setOverview, restart, get r3d() { return r3d; } };
+if (new URLSearchParams(location.search).has("eind")) naarEind();
+window.__krabbels = { S, wereld, naarEind, setMode, setOverview, restart, get r3d() { return r3d; } };

@@ -14,6 +14,8 @@ Bestanden
 - `assets/achtergrond/`: `scherm_0..3.jpg` (start en tutorial) en per level `L1-5_lucht.jpg` + `_10/_9/_8.png`
   (`maak_schermlagen.py`). Camera: in de tutorial volgt ze, in de levels staat ze stil per scherm en schuift ze door
   met de lagen na elkaar (tijden en regels in `wereld.js`)
+- tutorial: grijze blokken `assets/achtergrond/tut_bg1-3_*.png` (Figma `tutorial_level`); einde: door de deur naar
+  `assets/achtergrond/eind.jpg` (Figma `end_screen`, plat beeld met eigen loopvlakken `EIND` in wereld.js; `?eind` om te bekijken)
 - `assets/F/` (start, tutorial, logo met 3 wiggle-versies, papierrand) en `assets/L1/` (voorgrond van de levels)
 - `game.js` (spel + 2D), `game3d.js` (semi-3D), `wereld.js` (tekeningen en ankers)
 - `models/`: Blender-modellen; maken met de scripts in `3-design/assets/glb/` (`bouw_gidsen.py` leest `wereld.json`)

@@ -7,7 +7,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { LEVELS_VANAF, AANTAL, schermX, luchtStand, LAGEN } from "./wereld.js";
+import { LEVELS_VANAF, AANTAL, schermX, luchtStand, LAGEN, BLOKKEN, blokX } from "./wereld.js";
 
 const FOV = 40;
 const Dc = 540 / Math.tan((FOV / 2) * Math.PI / 180); // afstand waarop 1 px op z=0 precies 1 scherm-px is
@@ -92,6 +92,8 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
     const m = plane(achtergrond, makeTex(img), wereld.scherm + 1, 1080, i * wereld.scherm + wereld.scherm / 2, 540, 0, 0);
     m.material.transparent = false;
   });
+  // grijze blokken achter de tutorial, met parallax (de camera volgt hier de Krabbel)
+  const tut = BLOKKEN.map((b, i) => plane(achtergrond, makeTex(platen.tut[i]), platen.tut[i].width, 1080, 0, 540 - b.y, 0, 1 + i));
   // levels: per scherm een lucht en drie lagen. De schaduwen zitten al in de beelden uit Figma, dus ze liggen op
   // z = 0 en worden per beeld op hun plaats geschoven.
   const perScherm = (naam, order) => platen[naam].map((img) => plane(verte, makeTex(img), 1920, 1080, 0, 540, 0, order));
@@ -205,9 +207,10 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
     if (spriteCanvas !== lastSprite) { spriteTex.image = spriteCanvas; spriteTex.needsUpdate = true; lastSprite = spriteCanvas; }
     logo.material.map = logoTex[wiggle];
     krabbel.position.set(S.x, Y3(S.y - FEET_Y + SP_H / 2), S.diepte);
-    krabbel.scale.x = S.face;
+    const klein = S.deur ? Math.max(0.25, 1 - S.deur) : 1; // door de deur naar binnen
+    krabbel.scale.set(S.face * klein, klein, 1);
     krabbelSchaduw.position.set(krabbel.position.x + 3, krabbel.position.y - 7, S.diepte);
-    krabbelSchaduw.scale.x = S.face;
+    krabbelSchaduw.scale.set(S.face * klein, klein, 1);
     shadow.position.set(S.x, Y3(S.y) + 1.5, S.diepte);
     shadow.visible = S.onGround;
     const xc = S.cam.x + 960;
@@ -236,6 +239,7 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
     // 1) achtergrond rechtstreeks, 2) speelvlak naar het tussenbeeld en met schaduw erbovenop, 3) papierrand en Krabbel
     renderer.setRenderTarget(null);
     renderer.setClearColor(0xffffff, 1); renderer.clear();
+    BLOKKEN.forEach((b, i) => { tut[i].position.x = (overview ? b.x : blokX(b, S.cam.x)) + platen.tut[i].width / 2; });
     renderer.render(achtergrond, camera);
     zetVerte(S.cam, overview);
     if (overview) renderer.render(verte, camera);
