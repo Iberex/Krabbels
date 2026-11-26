@@ -41,7 +41,7 @@ let IMG = null, PLATEN = null;
 if (SAMEN) {
   PLATEN = await laadPlaten(loadImg);
   // grijze versies van de stukken voorbij de papierrand
-  const nodig = (i) => (i + 1) * level.tegelBreedte > level.overgang;
+  const nodig = (i) => INKLEUREN && (i + 1) * level.tegelBreedte > level.overgang;
   PLATEN.grijs = { blok: PLATEN.blok.map((t, i) => (nodig(i) ? grijs(t) : null)), gids: PLATEN.gids.map((t, i) => (nodig(i) ? grijs(t) : null)) };
   if (gevraagd === 1) level.spawn.x = level.overgang + 150;
 } else {

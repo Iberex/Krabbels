@@ -1,7 +1,6 @@
 // Level 0/1 = het frame "final_foreground" uit Figma: startstuk met logo, tutorial, papierrand en level 1,
-// als één doorlopende wereld (voorlopig enkel de voorgrond). Voorbij de papierrand wordt de wereld
-// ingekleurd langs het pad.
-export const INKLEUREN = true;  // false = alles meteen in kleur, zoals in Figma
+// als één doorlopende wereld (voorlopig enkel de voorgrond).
+export const INKLEUREN = false; // alles meteen in kleur, zoals in Figma. true = grijs tot de Krabbel voorbijkomt
 export const VOOR = 300;        // zo ver (px) loopt de kleur voor de Krabbel uit
 
 // grillige inkleurrand (y = 0..1080, van boven naar onder). Dezelfde formule staat in game3d.js (GLSL).
