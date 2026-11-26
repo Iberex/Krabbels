@@ -73,6 +73,43 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
   // de levels: grond, gras, water, ravijnen en het voorgronddecor (laag 6 en 7: rotsjes, potloden, deur)
   const [grond, gras, water, ravijn, decor] = await Promise.all(["grond", "gras", "water", "ravijn", "decor"].map((n) => laad(`${n}_level1`)));
   decor.traverse((o) => { if (/laag(8|9|10)$/.test(o.name) && !o.isMesh) o.visible = false; }); // de achtergrond komt uit Figma
+  // -------------------------------------------------------- eindscherm: opgebouwd uit de modellen van de levels
+  const eind = { achter: new THREE.Scene(), speel: new THREE.Scene() };
+  licht(eind.speel);
+  plane(eind.achter, makeTex(platen.eindAchter), 1920, 1080, 960, 540, 0, 0).material.transparent = false;
+  const doos = (o) => new THREE.Box3().setFromObject(o);
+  const zoek = (model, links, breed) => model.children.find((c) => { const b = doos(c); return Math.abs(b.min.x - links) < 45 && Math.abs(b.max.x - b.min.x - breed) < 70; });
+  // een kopie van een levelonderdeel, verschoven (dx, dy omhoog) en eventueel minder diep
+  // zak: bij een opgetild platform de donkere onderband van de aarde mee terug naar beneden trekken
+  function kopieer(obj, dx, dy, diep = 1, zak = false) {
+    if (!obj) return;
+    const houder = new THREE.Group(); houder.scale.set(100, 100, 100 * diep); houder.position.set(dx, dy, 0);
+    const c = obj.clone();
+    new THREE.Matrix4().makeScale(0.01, 0.01, 0.01).multiply(obj.matrixWorld).decompose(c.position, c.quaternion, c.scale);
+    c.traverse((o) => {
+      if (!o.isMesh) return;
+      o.material = o.material.clone();
+      if (!zak) return;
+      o.geometry = o.geometry.clone();
+      const p = o.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) if (p.getY(i) < 0.85) p.setY(i, p.getY(i) - 4); // in modeleenheden (100 px = 1)
+    });
+    houder.add(c); eind.speel.add(houder);
+  }
+  const gras600 = zoek(gras, 0, 600), gras1920 = zoek(gras, 900, 1920);
+  const grond540 = zoek(grond, 30, 540), grond1860 = zoek(grond, 930, 1860);
+  // [grasmodel, grondmodel, dx, dy omhoog, diepte]: hogere platformen zijn minder diep
+  for (const [g1, g2, dx, dy, diep] of [
+    [gras600, grond540, -30, -64, 1], [gras1920, grond1860, -30, -64, 1],        // onderaan links en rechts
+    [gras1920, grond1860, -2026, 293, 0.55], [gras1920, grond1860, 170, 176, 0.65], // linksboven en rechts midden
+  ]) { kopieer(g1, dx, dy, diep); kopieer(g2, dx, dy, diep, dy > 0); }
+  kopieer(zoek(water, 570, 360), -30, -64);
+  let deur = null;
+  decor.traverse((o) => { if (!deur && /deur/i.test(o.name)) deur = o; });
+  if (deur) { const b = doos(deur); kopieer(deur, 60 - b.min.x, 1080 - 442 - b.min.y); }
+  const eindGidsen = await laad("gidsen_leveleind");
+  eind.speel.add(eindGidsen);
+
   const levels = new THREE.Group(); levels.position.x = wereld.start; speel.add(levels);
   // donkere bodem onder elk ravijn
   const bodems = [];
@@ -231,6 +268,11 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
     }
     bodems.forEach((m) => { m.visible = !overview; }); // anders steekt de bodem onderaan uit
 
+    if (S.eind) { // vast scherm: camera in het midden
+      const w = canvas.clientWidth || 1600, h = canvas.clientHeight || 900, sc = h / 1080;
+      camera.position.set(960 + OX, 540 + OY, Dc); camera.quaternion.set(0, 0, 0, 1);
+      camera.setViewOffset(w, h, -OX * sc, OY * sc, w, h);
+    }
     renderer.getDrawingBufferSize(maat);
     if (doel.width !== maat.x || doel.height !== maat.y) { doel.setSize(maat.x, maat.y); mengMat.uniforms.grootte.value.copy(maat); }
     mengMat.uniforms.schaal.value = (maat.y / 1080) * (overview ? 0.35 : 1);
@@ -240,6 +282,16 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
     renderer.setRenderTarget(null);
     renderer.setClearColor(0xffffff, 1); renderer.clear();
     BLOKKEN.forEach((b, i) => { tut[i].position.x = (overview ? b.x : blokX(b, S.cam.x)) + platen.tut[i].width / 2; });
+    if (S.eind) {
+      renderer.render(eind.achter, camera);
+      renderer.setRenderTarget(doel);
+      renderer.setClearColor(0x000000, 0); renderer.clear();
+      renderer.render(eind.speel, camera);
+      renderer.setRenderTarget(null);
+      renderer.render(mengScene, mengCam);
+      renderer.render(boven, camera);
+      return;
+    }
     renderer.render(achtergrond, camera);
     zetVerte(S.cam, overview);
     if (overview) renderer.render(verte, camera);
@@ -259,5 +311,5 @@ export async function create({ canvas, wereld, platen, spriteSize }) {
 
   look.set(990, 540, 0);
   resize();
-  return { render, setOverview, resize, speel, camera, achtergrond };
+  return { render, setOverview, resize, speel, camera, achtergrond, eind };
 }

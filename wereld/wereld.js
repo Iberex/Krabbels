@@ -161,15 +161,16 @@ export const BLOKKEN = LAGEN_TUT.flatMap(([laag, r, rij]) => rij.map(([x, w], k)
 export const blokX = (b, cam) => b.x + (1 - b.r) * (Math.min(cam, VOLG_MAX) - b.camRef);   // vanaf de levels schuiven ze niet meer
 
 // ---------------------------------------------------------------- eindscherm (Figma "end_screen")
-// Eén vast scherm; de Krabbel komt uit de deur linksboven en kan er rondlopen.
+// Eén vast scherm; de Krabbel komt uit de deur linksboven en kan er rondlopen. De loopvlakken zijn de grashoogtes
+// uit het ontwerp (442, 559, 799). In 3D wordt het opgebouwd uit de modellen van de levels (game3d.js).
 export const EIND = {
-  start: { x: 150, y: 447 },
+  start: { x: 150, y: 442 },
   // achterTot: een hoger platform dat achter het lagere ligt is geen muur (je kan eronderdoor)
   vlakken: [
-    { x0: 0, x1: 790, y: 447, achterTot: 1920 }, { x0: 1072, x1: 1920, y: 562, achterTot: 1920 },
-    { x0: 0, x1: 572, y: 801 }, { x0: 870, x1: 1920, y: 801 },
+    { x0: 0, x1: 790, y: 442, achterTot: 1920 }, { x0: 1072, x1: 1920, y: 559, achterTot: 1920 },
+    { x0: 0, x1: 572, y: 799 }, { x0: 870, x1: 1920, y: 799 },
   ],
-  bruggen: [{ x: 570, y: 805 }],
-  hellingen: [[782, 450, 1080, 568]],
-  ladders: [{ x: 1567, boven: 562, onder: 801 }],
+  bruggen: [{ x: 570, y: 799 }],
+  hellingen: [[782, 442, 1080, 559]],
+  ladders: [{ x: 1567, boven: 559, onder: 799 }],
 };

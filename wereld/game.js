@@ -50,7 +50,8 @@ const [achtergronden, lucht, l10, l9, l8, blok, logo, rand, achter, grond] = awa
 ]);
 const PLATEN = { achtergronden, lucht, l10, l9, l8, logo, rand, logoPlek: { x: 320, y: 200 }, randPlek: { x: RAND - 60, y: 0 } };
 PLATEN.tut = await Promise.all(BLOKKEN.map((b) => loadImg(`assets/achtergrond/${b.naam}`)));
-PLATEN.eind = await loadImg("assets/achtergrond/eind.jpg");
+PLATEN.eind = await loadImg("assets/achtergrond/eind.jpg");           // 2D: het hele eindscherm als beeld
+PLATEN.eindAchter = await loadImg("assets/achtergrond/eind_achter.jpg"); // 3D: enkel de achtergrond ervan
 document.title = "Krabbels · de wereld";
 
 // ---------------------------------------------------------------- waar je kan staan
@@ -176,9 +177,8 @@ function terugUitEind() {
   S.eind = false; S.deur = 0; VLAKKEN = maakVlakken(wereld); LADDERS = wereld.ladders;
   toonDoek();
 }
-// het eindscherm is een plat beeld: dat tekent altijd het 2D-doek
 function toonDoek() {
-  const d3 = S.mode === "3d" && !S.eind;
+  const d3 = S.mode === "3d";
   c2d.style.display = d3 ? "none" : "block";
   c3d.style.display = d3 ? "block" : "none";
 }
@@ -263,8 +263,9 @@ const eind = (wereld.deur.x0 + wereld.deur.x1) / 2 - 40;
 function einde(dt) {
   // de Krabbel loopt in het midden van de platformen; aan de voet van een ladder komt die naar voren,
   // want in het midden staat daar het hoge blok
-  const bijBlok = !S.eind && wereld.vlakken.some((v) => v.achterTot && S.x > v.x0 - 130 && S.x < v.achterTot + 10 && S.y > v.y + 6);
-  S.diepte += ((bijBlok ? LADDER_DIEPTE : 0) - S.diepte) * Math.min(1, dt * 7);
+  // op het eindscherm: op het onderste niveau loopt de Krabbel vooraan (daarachter staan de hoge blokken)
+  const bijBlok = S.eind ? S.y > 600 : wereld.vlakken.some((v) => v.achterTot && S.x > v.x0 - 130 && S.x < v.achterTot + 10 && S.y > v.y + 6);
+  S.diepte += ((bijBlok ? (S.eind ? 62 : LADDER_DIEPTE) : 0) - S.diepte) * Math.min(1, dt * 7);
   // door de deur: de Krabbel stapt erin, alles wordt even wit en daar is het eindscherm
   if (!S.eind && !S.deur && S.onGround && S.x >= eind) { S.deur = 0.001; S.won = false; $("waas").style.opacity = 1; }
   if (S.deur) {
@@ -416,7 +417,7 @@ function frame(now) {
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
   update(dt);
   updateCamera(dt);
-  if (S.mode === "2d" || S.eind) draw2D();
+  if (S.mode === "2d") draw2D();
   else if (r3d) r3d.render(S, krabbelSprite(wiggle(), legFrame()), wiggle());
   requestAnimationFrame(frame);
 }
