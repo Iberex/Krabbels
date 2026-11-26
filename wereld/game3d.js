@@ -40,8 +40,9 @@ export async function create({ canvas, delen, W, grens, platen, spriteSize }) {
   const wit = !!platen; // final_foreground: witte achtergrond zoals in Figma
   const U = { uCam: { value: 0 }, uFront: { value: 0 }, uPlat: { value: 0 }, uBuf: { value: new THREE.Vector2(1, 1) }, uGrens: { value: grens || 0 } };
   // lineair: het materiaal tekent naar het tussenbeeld (niet rechtstreeks naar het scherm)
-  // snij: niets tonen links van de papierrand (door de schuine kijkhoek piepte het gras van level 1 er anders langs)
-  function bewerk(mat, { kleur = false, lineair = true, snij = false }) {
+  // snij: niets mag onder de papierrand door steken (door de schuine kijkhoek schuiven de blokken anders opzij)
+  //       1 = enkel rechts van de rand tonen (level 1), 2 = enkel links ervan (tutorialblokken)
+  function bewerk(mat, { kleur = false, lineair = true, snij = 0 }) {
     if ((!kleur && !snij) || mat.userData.bewerkt) return;
     mat.userData.bewerkt = true;
     mat.onBeforeCompile = (sh) => {
@@ -54,7 +55,7 @@ export async function create({ canvas, delen, W, grens, platen, spriteSize }) {
           vec3 vlak = cameraPosition + (vWereld - cameraPosition) * (cameraPosition.z / (cameraPosition.z - vWereld.z));
           float x = mix(uCam + gl_FragCoord.x / uBuf.x * 1920.0, vlak.x, uPlat);
           float y = mix(1080.0 - gl_FragCoord.y / uBuf.y * 1080.0, 1080.0 - vlak.y, uPlat);
-          ${snij ? "if (x < uGrens + 12.0) discard;" : ""}
+          ${snij ? `if (x ${snij === 1 ? "<" : ">="} uGrens + 20.0) discard;` : ""}
           ${kleur ? `float kras = 30.0 * sin(y * 0.043) + 16.0 * sin(y * 0.151 + 1.3) + 9.0 * sin(y * 0.47 + 0.4) + (y - 540.0) * 0.12;
           if (x > max(uGrens, uFront + kras)) {
             vec3 c = gl_FragColor.rgb;
@@ -151,22 +152,22 @@ export async function create({ canvas, delen, W, grens, platen, spriteSize }) {
       lagen.push({ knoop, r, s, off, fo });
     });
     // alles wat niet verschuift (grond, gras, voorgronddecor) inkleuren
-    const snij = wit && off > 0;
-    if (inkleuren || snij) groep.traverse((o) => { if (o.isMesh) bewerk(o.material, { kleur: inkleuren, snij }); });
+    modellen.forEach((m, i) => {
+      const snij = !wit ? 0 : off > 0 ? 1 : namen[i] === "voorgrond" ? 2 : 0;
+      const kleur = inkleuren || (wit && namen[i] === "gidsen" && delen.some((d) => d.inkleuren));
+      if (m && (kleur || snij)) m.scene.traverse((o) => { if (o.isMesh) bewerk(o.material, { kleur, snij }); });
+    });
   }
-  // -------------------------------------------------------- platte stukken uit Figma: ankers, tekenlijnen, papierrand, logo
+  // -------------------------------------------------------- platte stukken uit Figma: logo en papierrand
   // Ze liggen op het speelvlak (z = 0) en vallen zo exact samen met het ontwerp. Hun schaduw zit al in de PNG.
+  // De papierrand wordt als allerlaatste getekend, boven alles.
+  const boven = new THREE.Scene();
   let logo = null;
   if (platen) {
-    const plaat = (img, x, y, order, kleur = false) => {
-      const m = plane(speel, makeTex(img), img.width, img.height, x + img.width / 2, Y3(y + img.height / 2), 0, order);
-      bewerk(m.material, { kleur });
-      return m;
-    };
-    const inkleur = delen.some((d) => d.inkleuren);
-    platen.gids.forEach((img, i) => plaat(img, i * img.width, 0, 2, inkleur && !!platen.grijs.gids[i]));
-    plaat(platen.rand, platen.randPlek.x, platen.randPlek.y, 6);       // voor de Krabbel
-    const m = plaat(platen.logo[0], platen.logoPlek.x, platen.logoPlek.y, 1);
+    const plaat = (scene, img, x, y, order) =>
+      plane(scene, makeTex(img), img.width, img.height, x + img.width / 2, Y3(y + img.height / 2), 0, order);
+    plaat(boven, platen.rand, platen.randPlek.x, platen.randPlek.y, 1);
+    const m = plaat(speel, platen.logo[0], platen.logoPlek.x, platen.logoPlek.y, 1);
     logo = { m, tex: platen.logo.map(makeTex) };
   }
   const zetLagen = (cx, plat) => lagen.forEach(({ knoop, r, s, off, fo }) => {
@@ -300,6 +301,7 @@ export async function create({ canvas, delen, W, grens, platen, spriteSize }) {
     renderer.render(speel, camera);
     renderer.setRenderTarget(null);
     renderer.render(mengScene, mengCam);
+    renderer.render(boven, camera);
   }
 
   look.set(990, 540, 0);

@@ -309,7 +309,7 @@ async function ensure3D() {
   try {
     const mod = await import("./game3d.js");
     const delen = SAMEN
-      ? [{ nr: "final", off: 0, kaal: true, level: { modellen: ["voorgrond"] } },
+      ? [{ nr: "final", off: 0, kaal: true, level: { modellen: ["voorgrond", "gidsen"] } },
          { nr: 1, off: level.level1x, kaal: true, inkleuren: INKLEUREN, level: { modellen: ["grond", "gras"] } }]
       : [{ nr: gevraagd, off: 0, IMG, level }];
     r3d = await mod.create({ canvas: c3d, delen, W, grens: GRENS, platen: PLATEN, spriteSize: [SP_W, SP_H, FEET_X, FEET_Y] });
