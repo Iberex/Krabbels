@@ -1,8 +1,8 @@
-// Krabbels · wereld (2D en 3D) — Level 1
-// Lagen komen rechtstreeks uit Figma (pagina "FINAL FINAL FINAL", level_1_final).
-// Besturing: pijltjes. Brug/helling/ladder zitten er nog niet in.
-
-import { INKLEUREN, VOOR, kras, grijs, knip, laadPlaten, boog, lijnen, krijt } from "./wereld.js";
+// Krabbels · de wereld (2D en 3D)
+// Eén doorlopende wereld: start met logo, tutorial, papierrand en dan level 1 tot 5 na elkaar.
+// Voorgrond en platformen komen uit wereld.json (maak_wereld.py), de achtergronden per level uit assets/L1-L5.
+// Besturing: pijltjes, spatie = springen, ↑↓ = ladder.
+import { lijnen, anker, tekenGids, tekenAnker, vloeit } from "./wereld.js";
 
 const $ = (id) => document.getElementById(id);
 const c2d = $("c2d"), ctx = c2d.getContext("2d");
@@ -13,14 +13,13 @@ const melding = $("melding");
 const C = {
   speed: 520,        // px/s
   accel: 5200,
-  jumpV: 1320,       // genoeg om de klifjes van ~213 px te halen
+  jumpV: 1320,       // genoeg om de klifjes van ~240 px te halen
   gravity: 3200,
   cutJump: 0.72,     // los de knop eerder -> iets lagere sprong (kindvriendelijk: haalt bijna altijd het gat)
   coyote: 0.09,
   buffer: 0.11,
   step: 40,          // verschil dat je zonder springen mag oplopen
   klim: 330,         // px/s op een ladder
-  hoogte: 126,       // van voeten tot kruin van de Krabbel
   halfW: 26,
   minX: 90,          // onzichtbare muur links, zodat je niet voorbij het begin van de wereld loopt
   fallDeath: 1250,
@@ -31,53 +30,46 @@ const C = {
 const loadImg = (src) => new Promise((res, rej) => {
   const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("kon " + src + " niet laden")); i.src = src;
 });
+const json = async (pad) => (await fetch(pad)).json();
+const reeks = (map, naam, n) => Promise.all(Array.from({ length: n }, (_, i) => loadImg(`${map}/${naam}_${i}.png`)));
 
-const AANTAL_LEVELS = 5;
-const gevraagd = Math.max(0, Math.min(AANTAL_LEVELS, parseInt(new URLSearchParams(location.search).get("level")) || 0));
-const SAMEN = gevraagd <= 1;            // 0 en 1 = final_foreground: tutorial en level 1 als één wereld
-const LVL = SAMEN ? 1 : gevraagd;
+const wereld = await json("wereld.json");
+const W = wereld.breedte, RAND = wereld.rand;
+const VOORAF = 7680;                  // zo breed is het witte stuk (start + tutorial)
+const gevraagd = Math.max(0, Math.min(wereld.levels.length, parseInt(new URLSearchParams(location.search).get("level")) || 0));
 
-const level = await (await fetch(SAMEN ? "final.json" : `level${gevraagd}.json`)).json();
-let IMG = null, PLATEN = null;
-if (SAMEN) {
-  PLATEN = await laadPlaten(loadImg);
-  // grijze versies van de stukken voorbij de papierrand
-  const nodig = (i) => INKLEUREN && (i + 1) * level.tegelBreedte > level.overgang;
-  PLATEN.grijs = { blok: PLATEN.blok.map((t, i) => (nodig(i) ? grijs(t) : null)), gids: PLATEN.gids.map((t, i) => (nodig(i) ? grijs(t) : null)) };
-  if (gevraagd === 1) level.spawn.x = level.overgang + 150;
-} else {
-  const dir = `assets/L${gevraagd}/`;
-  IMG = {
-    backdrop: await loadImg(dir + level.backdrop.bestand),
-    bg: await Promise.all(level.bg.map((b) => loadImg(dir + b.bestand))),
-    achter: await Promise.all(Array.from({ length: level.tegels }, (_, i) => loadImg(`${dir}achter_${i}.png`))),
-    grond: await Promise.all(Array.from({ length: level.tegels }, (_, i) => loadImg(`${dir}grond_${i}.png`))),
-  };
+// de platte stukken van start en tutorial
+const [blok, logo, rand] = await Promise.all([reeks("assets/F", "blok", 4), reeks("assets/F", "logo", 3), loadImg("assets/F/rand.png")]);
+const PLATEN = { logo, rand, logoPlek: { x: 320, y: 200 }, randPlek: { x: RAND - 60, y: 0 } };
+
+// per level: instellingen meteen, beelden op de achtergrond (het level waar je start eerst)
+const delen = await Promise.all(wereld.levels.map(async (l) => ({ ...l, info: await json(`level${l.nr}.json`), img: null })));
+async function laadBeelden(deel) {
+  const map = `assets/L${deel.nr}`, info = deel.info;
+  const [backdrop, bg, achter, grond] = await Promise.all([
+    loadImg(`${map}/${info.backdrop.bestand}`), Promise.all(info.bg.map((b) => loadImg(`${map}/${b.bestand}`))),
+    reeks(map, "achter", info.tegels), reeks(map, "grond", info.tegels),
+  ]);
+  deel.img = { backdrop, bg, achter, grond };
 }
-const GRENS = SAMEN ? level.overgang : null; // vanaf hier wordt er ingekleurd
-document.title = `Krabbels · ${level.naam.replace("Krabbels · ", "")}`;
+const eerste = Math.max(0, gevraagd - 1);
+await laadBeelden(delen[eerste]);
+(async () => { for (const k of [1, 2, 3, 4, -1, -2, -3, -4]) { const d = delen[eerste + k]; if (d && !d.img) await laadBeelden(d); } })();
+document.title = "Krabbels · de wereld";
 
-const W = level.breedte;
-// final.json beschrijft de wereld als losse loopvlakken (met bruggen, hellingen en ladders),
-// de andere levels als een hoogtekaart.
-const VLAKKEN = level.vlakken
-  ? [
-    ...level.vlakken.map((v) => ({ x0: v.x0, x1: v.x1, achterTot: v.achterTot, blok: true, y: () => v.y })),
-    ...level.bruggen.map((b) => {
-      const p = boog(b.x, b.y);
-      return { x0: b.x, x1: b.x + 300, y: (x) => {
-        const i = Math.max(1, p.findIndex((q) => q[0] >= x)), [x0, y0] = p[i - 1], [x1, y1] = p[i];
-        return y0 + (y1 - y0) * Math.max(0, Math.min(1, (x - x0) / ((x1 - x0) || 1)));
-      } };
-    }),
-    ...level.hellingen.map(([ax, ay, bx, by]) => ({ x0: ax, x1: bx, y: (x) => ay + (by - ay) * ((x - ax) / (bx - ax)) })),
-  ]
-  : null;
-const LADDERS = level.ladders || [];
-const topAt = (x) => {
-  const i = Math.max(0, Math.min(level.top.length - 1, Math.round(x / level.stap)));
-  return level.top[i];
-};
+// ---------------------------------------------------------------- waar je kan staan
+const VLAKKEN = [
+  ...wereld.vlakken.map((v) => ({ x0: v.x0, x1: v.x1, achterTot: v.achterTot, blok: true, y: () => v.y })),
+  ...wereld.bruggen.map((b) => {
+    const p = lijnen.boog(b.x, b.y);
+    return { x0: b.x, x1: b.x + 300, y: (x) => {
+      const i = Math.max(1, p.findIndex((q) => q[0] >= x)), [x0, y0] = p[i - 1], [x1, y1] = p[i];
+      return y0 + (y1 - y0) * Math.max(0, Math.min(1, (x - x0) / ((x1 - x0) || 1)));
+    } };
+  }),
+  ...wereld.hellingen.map(([ax, ay, bx, by]) => ({ x0: ax, x1: bx, y: (x) => ay + (by - ay) * ((x - ax) / (bx - ax)) })),
+];
+const LADDERS = wereld.ladders;
 // hoogste loopvlak op x dat niet boven "vanaf" ligt (je landt er enkel van bovenaf)
 const vlakOp = (x, vanaf) => {
   let best = -1;
@@ -92,16 +84,13 @@ const vlakOp = (x, vanaf) => {
 const groundAt = (x, vanaf = -Infinity) => {
   let best = -1;
   for (const dx of [-14, 0, 14]) {
-    const t = VLAKKEN ? vlakOp(x + dx, vanaf) : topAt(x + dx);
+    const t = vlakOp(x + dx, vanaf);
     if (t !== -1 && (best === -1 || t < best)) best = t;
   }
   return best;
 };
 // staat er op x een muur voor iemand met de voeten op hoogte y?
-const muur = (x, y) => {
-  if (!VLAKKEN) { const t = topAt(x); return t !== -1 && t < y - C.step; }
-  return VLAKKEN.some((v) => v.blok && x >= v.x0 && x <= v.x1 && v.y(x) < y - C.step && !(x < v.achterTot));
-};
+const muur = (x, y) => VLAKKEN.some((v) => v.blok && x >= v.x0 && x <= v.x1 && v.y(x) < y - C.step && !(x < v.achterTot));
 
 // ---------------------------------------------------------------- Krabbel (placeholder)
 // Voorlopig een simpele krijt-Krabbel; de echte komt van het kind.
@@ -167,13 +156,13 @@ function krabbelSprite(variant, leg) {
 }
 
 // ---------------------------------------------------------------- spelstaat
+const spawnX = gevraagd ? delen[gevraagd - 1].x + 150 : 150;
 const S = {
-  x: level.spawn.x, y: 0, vx: 0, vy: 0, onGround: false, face: 1,
+  x: spawnX, y: 0, vx: 0, vy: 0, onGround: false, face: 1,
   t: 0, coyote: 0, buffer: 0, jumpHeld: false, anim: 0,
-  safeX: level.spawn.x, safeY: null, won: false, flash: 0, ladder: null,
+  safeX: spawnX, safeY: null, won: false, flash: 0, ladder: null,
   diepte: 0, // 3D: hoe ver de Krabbel naar voren staat (0 = midden van het platform)
-  front: 0, frontDoel: 0, // tot waar de wereld ingekleurd is
-  cam: { x: 0, z: 1 }, mode: "2d", overview: false,
+  cam: { x: Math.max(0, spawnX - 730), z: 1 }, mode: "2d", overview: false,
 };
 S.y = groundAt(S.x) - 300;
 const keys = {};
@@ -184,21 +173,19 @@ function respawn() {
   while (groundAt(x) === -1 && x > 0) x -= 20;
   const vanaf = S.safeY === null ? -Infinity : S.safeY - 130; // niet op een hoger blok terechtkomen
   const grond = groundAt(x, vanaf) === -1 ? groundAt(x) : groundAt(x, vanaf);
-  S.x = x; S.y = grond - 260; S.ladder = null; S.vx = 0; S.vy = 0; S.flash = 0.45;
+  S.x = x; S.y = grond - 260; S.vx = 0; S.vy = 0; S.ladder = null; S.flash = 0.45;
 }
-function resetKleur() { if (SAMEN) S.front = S.frontDoel = Math.max(GRENS - 300, level.spawn.x + VOOR); } // voor de overgang is nog niets gekleurd
-resetKleur();
 function restart() {
-  resetKleur();
-  S.safeX = level.spawn.x; S.safeY = null; S.ladder = null; S.won = false; melding.hidden = true;
-  S.x = level.spawn.x; S.y = groundAt(S.x) - 300; S.vx = 0; S.vy = 0; S.flash = 0.3;
+  S.safeX = spawnX; S.safeY = null; S.ladder = null; S.won = false; melding.hidden = true;
+  S.x = spawnX; S.y = groundAt(S.x) - 300; S.vx = 0; S.vy = 0; S.flash = 0.3;
 }
 
 function update(dt) {
   S.t += dt;
   if (S.flash > 0) S.flash -= dt;
   if (S.overview || S.won) { S.vx *= 0.8; }
-  const dirx = S.overview || S.won ? 0 : (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
+  const vrij = !S.overview && !S.won;
+  const dirx = vrij ? (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0) : 0;
   if (dirx) S.face = dirx;
   // horizontaal
   const target = dirx * C.speed;
@@ -206,22 +193,15 @@ function update(dt) {
   S.vx += Math.max(-a, Math.min(a, target - S.vx));
   let nx = S.x + S.vx * dt;
   nx = Math.max(C.minX, Math.min(W - C.halfW, nx));
-  const ex = nx + Math.sign(S.vx) * C.halfW;
-  if (S.vx !== 0 && muur(ex, S.y)) { nx = S.x; S.vx = 0; }
-  // hangende blokken (tutorial): daar kan je onderdoor, maar niet doorheen springen
-  for (const p of level.plafond || []) {
-    const erin = (x) => x + C.halfW > p.x0 && x - C.halfW < p.x1;
-    if (erin(nx) && !erin(S.x) && S.y - C.hoogte < p.y - 1) { nx = S.x; S.vx = 0; }
-  }
+  if (S.vx !== 0 && muur(nx + Math.sign(S.vx) * C.halfW, S.y)) { nx = S.x; S.vx = 0; }
   S.x = nx;
   // ladder: pijl omhoog onderaan, pijl omlaag bovenaan
-  const vrij = !S.overview && !S.won;
   const op = vrij && !!keys.ArrowUp, neer = vrij && !!(keys.ArrowDown || keys.KeyS);
   const bij = LADDERS.find((l) => Math.abs(S.x - l.x) < 70);
   if (!S.ladder && bij && ((op && S.y > bij.boven + 20 && S.y <= bij.onder + 4) || (neer && S.onGround && Math.abs(S.y - bij.boven) < 4))) S.ladder = bij;
   if (S.ladder) {
     const l = S.ladder, richting = (neer ? 1 : 0) - (op ? 1 : 0);
-    if (Math.abs(S.x - l.x) > 70 || (vrij && keys.Space)) { S.ladder = null; }   // eraf lopen of springen
+    if (Math.abs(S.x - l.x) > 70 || (vrij && keys.Space)) S.ladder = null;   // eraf lopen of springen
     else {
       S.x += (l.x - S.x) * Math.min(1, dt * (dirx ? 0 : 12));
       S.y += richting * C.klim * dt; S.vy = 0; S.onGround = false;
@@ -245,9 +225,6 @@ function update(dt) {
   const prevY = S.y;
   S.vy += C.gravity * dt;
   S.y += S.vy * dt;
-  for (const p of level.plafond || []) {
-    if (S.vy < 0 && S.x + C.halfW > p.x0 && S.x - C.halfW < p.x1 && S.y - C.hoogte < p.y) { S.y = p.y + C.hoogte; S.vy = 0; }
-  }
   const g = groundAt(S.x, prevY - 26);
   if (g !== -1 && S.vy >= 0 && S.y >= g && prevY <= g + 26) { S.y = g; S.vy = 0; S.onGround = true; }
   else if (g !== -1 && S.onGround && S.vy >= 0 && Math.abs(S.y - g) < 30) { S.y = g; S.vy = 0; } // bergop en bergaf blijven plakken
@@ -259,27 +236,20 @@ function update(dt) {
   einde(dt);
 }
 
-// na elke stap: diepte, inkleuren, deur, voortgangsbalk
+// na elke stap: diepte, deur, voortgangsbalk
 const LADDER_DIEPTE = 72;
-function einde(dt = 1 / 60) {
+const eind = (wereld.deur.x0 + wereld.deur.x1) / 2 - 40;
+function einde(dt) {
   // de Krabbel loopt in het midden van de platformen; aan de voet van een ladder komt die naar voren,
   // want in het midden staat daar het hoge blok
-  const bijBlok = (level.vlakken || []).some((v) => v.achterTot && S.x > v.x0 - 130 && S.x < v.achterTot + 10 && S.y > v.y + 6);
+  const bijBlok = wereld.vlakken.some((v) => v.achterTot && S.x > v.x0 - 130 && S.x < v.achterTot + 10 && S.y > v.y + 6);
   S.diepte += ((bijBlok ? LADDER_DIEPTE : 0) - S.diepte) * Math.min(1, dt * 7);
-  // inkleuren langs het pad (kleur blijft, ook als je terugloopt)
-  if (SAMEN) {
-    S.frontDoel = Math.max(S.frontDoel, S.won ? W + 600 : S.x + VOOR);
-    S.front += (S.frontDoel - S.front) * Math.min(1, dt * 3);
-  }
-  // einde
-  const eind = level.deur ? (level.deur.x0 + level.deur.x1) / 2 - 40 : W - 260;
   if (!S.won && S.onGround && S.x >= eind) {
     S.won = true;
-    const volgende = LVL < AANTAL_LEVELS;
-    melding.innerHTML = `Level ${LVL} klaar!<small>${volgende ? `Druk op Enter voor level ${LVL + 1}` : "Dat was het laatste level"} · R = opnieuw</small>`;
+    melding.innerHTML = "Door de deur!<small>De Krabbel is aan het einde van de wereld · R = opnieuw · 0 = naar het begin</small>";
     melding.hidden = false;
   }
-  $("vbalk").style.width = Math.min(100, (S.x / (eind + 40)) * 100) + "%";
+  $("vbalk").style.width = Math.min(100, (S.x / eind) * 100) + "%";
 }
 
 function legFrame() {
@@ -288,82 +258,86 @@ function legFrame() {
   if (Math.abs(S.vx) < 30) return 0;
   return 1 + (Math.floor(S.anim) % 4);
 }
-const variantNow = () => Math.floor(S.t * 10) % 4 === 3 ? 1 : Math.floor(S.t * 10) % 4; // 0,1,2,1
-const wiggleVariant = () => [0, 1, 2, 1][Math.floor(Math.max(0, S.t) * 10) % 4]; // de eerste dt kan negatief zijn
+const wiggle = () => [0, 1, 2, 1][Math.floor(Math.max(0, S.t) * 10) % 4]; // de eerste dt kan negatief zijn
 
 // ---------------------------------------------------------------- camera
 function updateCamera(dt) {
   const zT = S.overview ? fit : 1;
   S.cam.z += (zT - S.cam.z) * Math.min(1, dt * 7);
   const viewW = c2d.width / S.cam.z;
-  // min 30 = exact het beeld van je ontwerp (de wereld begint aan frame-x 0); zo zie je de afgesneden rand niet
-  let t = W <= viewW ? (W - viewW) / 2 : Math.max(level.camMin, Math.min(W - viewW, S.x - viewW * 0.38));
+  let t = Math.max(0, Math.min(W - viewW - 40, S.x - viewW * 0.38)); // de aarde stopt net voor het einde
   if (S.overview) t = (W - viewW) / 2;
   S.cam.x += (t - S.cam.x) * Math.min(1, dt * 6);
 }
 
 // ---------------------------------------------------------------- 2D tekenen
-// Laag die op het venster van je Figma-frame (wereld-x = frameOffset) exact uitgelijnd staat en daarna trager meeschuift.
-function layer(img, b, cx, viewW, frameOffset) {
-  const r = b.snelheid, w = b.breedte, fo = frameOffset;
-  const L = b.x0 + fo + (1 - r) * (cx - fo);
+// Achtergrondlaag die op het venster van je Figma-frame exact uitgelijnd staat en daarna trager meeschuift.
+function laag(g, img, b, cx, viewW, frameOffset) {
+  const r = b.snelheid, w = b.breedte, L = b.x0 + frameOffset + (1 - r) * (cx - frameOffset);
   const k0 = Math.floor((cx - L) / w), k1 = Math.ceil((cx + viewW - L) / w);
   for (let k = k0; k <= k1; k++) {
     const x = L + k * w;
-    if (k & 1) { ctx.save(); ctx.translate(x + w, 0); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0, w, 1080); ctx.restore(); }
-    else ctx.drawImage(img, x, 0, w, 1080);
+    if (k & 1) { g.save(); g.translate(x + w, 0); g.scale(-1, 1); g.drawImage(img, 0, 0, w, 1080); g.restore(); }
+    else g.drawImage(img, x, 0, w, 1080);
   }
 }
+// de achtergrond van één level; g staat al in wereld-px
+function achtergrond(g, deel, cx, cy, viewW, viewH) {
+  if (!deel.img) return;
+  const info = deel.info, lc = cx - deel.x;
+  g.save(); g.translate(deel.x, 0);
+  if (info.backdrop.snelheid === 0) g.drawImage(deel.img.backdrop, lc, cy, viewW, viewH);
+  else laag(g, deel.img.backdrop, info.backdrop, lc, viewW, info.frameOffset);
+  info.bg.forEach((b, i) => laag(g, deel.img.bg[i], b, lc, viewW, info.frameOffset));
+  g.restore();
+}
+const tussen = document.createElement("canvas"); tussen.width = c2d.width; tussen.height = c2d.height;
+const tg = tussen.getContext("2d");
 
-// de voorgrond van final_foreground, met alles voorbij de inkleurrand nog grijs
-function tekenTegels(soort, cx, viewW) {
-  const T = level.tegelBreedte;
-  const rand = (y) => (INKLEUREN ? Math.max(GRENS, S.front + kras(y)) : W + 2000);
-  for (let i = 0; i < level.tegels; i++) {
-    const x = i * T;
-    if (x > cx + viewW || x + T < cx) continue;
-    const grijsTegel = INKLEUREN ? PLATEN.grijs[soort][i] : null;
-    if (!grijsTegel) { ctx.drawImage(PLATEN[soort][i], x, 0); continue; }
-    ctx.save(); knip(ctx, () => -2000, rand); ctx.drawImage(PLATEN[soort][i], x, 0); ctx.restore();
-    ctx.save(); knip(ctx, rand, () => W + 2000); ctx.drawImage(grijsTegel, x, 0); ctx.restore();
-  }
-}
-const logoBeeld = () => PLATEN.logo[wiggleVariant()]; // zelfde wiggle als de Krabbel
-// de tekeningen (brug, helling, ladder) een keer vooraf tekenen
-const TEKENING = SAMEN ? document.createElement("canvas") : null;
-if (SAMEN) {
-  TEKENING.width = W; TEKENING.height = 1080;
-  const g = TEKENING.getContext("2d");
-  lijnen(level).forEach((punten, i) => krijt(g, punten, 11 + i * 97));
-}
+// ankers, stippellijnen en tekeningen: elk stuk een keer vooraf tekenen
+const GIDSEN = [
+  ...lijnen(wereld).map((punten, i) => tekenGids(punten, 11 + i * 97)),
+  ...wereld.ankers.map(([x, y]) => tekenAnker(...anker(wereld, x, y), x < RAND)),
+];
 
 function draw2D() {
   const z = S.cam.z, cx = S.cam.x, cy = 540 - 540 / z;
   const viewW = c2d.width / z, viewH = c2d.height / z;
+  const inBeeld = (x, w) => x < cx + viewW && x + w > cx;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = SAMEN ? "#ffffff" : "#1b1b22"; ctx.fillRect(0, 0, c2d.width, c2d.height);
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, c2d.width, c2d.height);
   ctx.setTransform(z, 0, 0, z, -cx * z, -cy * z);
-  if (SAMEN) {
-    tekenTegels("blok", cx, viewW);
-    ctx.drawImage(logoBeeld(), PLATEN.logoPlek.x, PLATEN.logoPlek.y);
-    tekenTegels("gids", cx, viewW);
-    ctx.drawImage(TEKENING, 0, 0);
-  } else {
-    // backdrop: staat stil (of drijft heel traag) en wordt spiegelend herhaald
-    const bd = level.backdrop;
-    if (bd.snelheid === 0) ctx.drawImage(IMG.backdrop, cx, cy, viewW, viewH);
-    else layer(IMG.backdrop, bd, cx, viewW, level.frameOffset);
-    // parallax-lagen: spiegelend herhaald
-    level.bg.forEach((b, i) => layer(IMG.bg[i], b, cx, viewW, level.frameOffset));
-    const T = level.tegelBreedte;
-    for (const soort of [IMG.achter, IMG.grond]) {
-      for (let i = 0; i < level.tegels; i++) if (i * T < cx + viewW && (i + 1) * T > cx) ctx.drawImage(soort[i], i * T, 0);
+  // achtergronden (start en tutorial zijn wit, zoals in Figma)
+  if (S.overview) {
+    for (const d of delen) {
+      const x0 = Math.max(d.x, VOORAF);
+      ctx.save(); ctx.beginPath(); ctx.rect(x0, cy, d.x + d.breedte - x0, viewH); ctx.clip();
+      achtergrond(ctx, d, cx, cy, viewW, viewH); ctx.restore();
+    }
+  } else if (cx + viewW > VOORAF) {
+    const { basis, volgende, mate } = vloeit(delen, cx + 960);
+    ctx.save(); ctx.beginPath(); ctx.rect(VOORAF, 0, W, 1080); ctx.clip();
+    achtergrond(ctx, delen[basis], cx, 0, 1920, 1080);
+    if (mate > 0) { // het volgende level vloeit er geleidelijk overheen
+      tg.setTransform(1, 0, 0, 1, -cx, 0); tg.clearRect(cx, 0, 1920, 1080);
+      achtergrond(tg, delen[volgende], cx, 0, 1920, 1080);
+      ctx.globalAlpha = mate; ctx.drawImage(tussen, cx, 0);
+    }
+    ctx.restore();
+  }
+  // voorgrond
+  blok.forEach((t, i) => { if (inBeeld(i * 1920, 1920)) ctx.drawImage(t, i * 1920, 0); });
+  if (inBeeld(0, 1920)) ctx.drawImage(PLATEN.logo[wiggle()], PLATEN.logoPlek.x, PLATEN.logoPlek.y); // zelfde wiggle als de Krabbel
+  for (const d of delen) {
+    if (!d.img) continue;
+    for (const soort of [d.img.achter, d.img.grond]) {
+      soort.forEach((t, i) => { const x = d.x + i * d.info.tegelBreedte; if (inBeeld(x, d.info.tegelBreedte)) ctx.drawImage(t, x, 0); });
     }
   }
-  // laagvolgorde: wereld < tekenlijnen/ankers < papierrand < Krabbel
-  if (SAMEN) ctx.drawImage(PLATEN.rand, PLATEN.randPlek.x, PLATEN.randPlek.y);
-  // Krabbel
-  const spr = krabbelSprite(wiggleVariant(), legFrame());
+  for (const s of GIDSEN) if (inBeeld(s.x, s.beeld.width)) ctx.drawImage(s.beeld, s.x, s.y);
+  // laagvolgorde: wereld < tekeningen/ankers < papierrand < Krabbel
+  ctx.drawImage(PLATEN.rand, PLATEN.randPlek.x, PLATEN.randPlek.y);
+  const spr = krabbelSprite(wiggle(), legFrame());
   const sc = S.overview ? Math.max(1, 0.55 / z) : 1;
   ctx.save();
   ctx.translate(S.x, S.y);
@@ -381,11 +355,8 @@ async function ensure3D() {
   melding.innerHTML = "3D laden…<small>Dit kan de eerste keer even duren</small>"; melding.hidden = false;
   try {
     const mod = await import("./game3d.js");
-    const delen = SAMEN
-      ? [{ nr: "final", off: 0, kaal: true, level: { modellen: ["voorgrond", "gidsen"] } },
-         { nr: 1, off: level.level1x, kaal: true, inkleuren: INKLEUREN, level: { modellen: ["grond", "gras"] } }]
-      : [{ nr: gevraagd, off: 0, IMG, level }];
-    r3d = await mod.create({ canvas: c3d, delen, W, grens: GRENS, platen: PLATEN, spriteSize: [SP_W, SP_H, FEET_X, FEET_Y] });
+    r3d = await mod.create({ canvas: c3d, wereld, delen, platen: PLATEN, spriteSize: [SP_W, SP_H, FEET_X, FEET_Y] });
+    r3d.setOverview(S.overview);
   } catch (e) {
     console.error(e);
     melding.innerHTML = "3D kon niet laden<small>Heb je internet? Three.js komt van een CDN. (" + e.message + ")</small>"; melding.hidden = false;
@@ -409,6 +380,7 @@ function setOverview(v) {
   S.overview = v; $("bwereld").classList.toggle("aan", v);
   if (r3d) r3d.setOverview(v);
 }
+const naarLevel = (n) => { location.search = "?level=" + n + (S.mode === "3d" ? "&3d" : ""); };
 
 $("b2d").onclick = () => setMode("2d");
 $("b3d").onclick = () => setMode("3d");
@@ -420,8 +392,7 @@ addEventListener("keydown", (e) => {
   if (e.code === "KeyV") setMode(S.mode === "2d" ? "3d" : "2d");
   if (e.code === "KeyW") setOverview(!S.overview);
   if (e.code === "KeyR") restart();
-  if (e.code === "Enter" && S.won && LVL < AANTAL_LEVELS) naarLevel(LVL + 1);
-  if (/^Digit[0-9]$/.test(e.code) && +e.code.slice(5) <= AANTAL_LEVELS) naarLevel(+e.code.slice(5));
+  if (/^Digit[0-9]$/.test(e.code) && +e.code.slice(5) <= delen.length) naarLevel(+e.code.slice(5));
 });
 addEventListener("keyup", (e) => { keys[e.code] = false; });
 addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
@@ -433,10 +404,9 @@ function frame(now) {
   update(dt);
   updateCamera(dt);
   if (S.mode === "2d") draw2D();
-  else if (r3d) r3d.render(S, dt, krabbelSprite(wiggleVariant(), legFrame()), wiggleVariant());
+  else if (r3d) r3d.render(S, krabbelSprite(wiggle(), legFrame()), wiggle());
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-const naarLevel = (n) => { location.search = "?level=" + n + (S.mode === "3d" ? "&3d" : ""); };
 if (new URLSearchParams(location.search).has("3d")) setMode("3d");
-window.__krabbels = { S, level, setMode, setOverview, restart, get r3d() { return r3d; } };
+window.__krabbels = { S, wereld, delen, setMode, setOverview, restart, get r3d() { return r3d; } };

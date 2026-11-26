@@ -1,25 +1,20 @@
 # Krabbels · wereld (2D en 3D)
 
-Speelbaar: tutorial (level 0) en Level 1 t/m 5, rechtstreeks gebouwd op de lagen uit Figma (pagina "FINAL FINAL FINAL", level_1_final).
-Nog zonder bruggen/hellingen/ladders: enkel pijltjes.
+De hele wereld in een stuk: start met logo, tutorial, papierrand en dan level 1 tot 5 na elkaar (door de deur op het einde).
 
-Starten (vanuit de projectmap):  preview "wereld" (poort 5178), of
+Starten (vanuit de projectmap): preview "wereld" (poort 5178), of
 `python3 -m http.server 5178 --directory 5-demos/Wereld` en open http://localhost:5178
 3D laadt Three.js van een CDN (internet nodig).
 
-Besturing: ← → lopen · ↑/spatie springen · V = 2D/3D · W = hele wereld · R = opnieuw · 0–5 = level kiezen (0 = tutorial) · Enter na de deur = volgend level.
-(Of rechtstreeks: ?level=2)
-In 3D: één vaste camerahoek; in "Hele wereld": slepen = draaien, scrollen = zoomen.
+Besturing: pijltjes lopen, spatie of omhoog springen, omhoog/omlaag op de ladder, V = 2D/3D, W = hele wereld,
+R = opnieuw, 0 = begin, 1-5 = bij dat level beginnen (ook `?level=3&3d`).
 
 Bestanden
-- level1–5.json  ondergrondhoogte per 2 px (uit de PNG afgeleid), spawn, deur, parallax-lagen
-- assets/L1–L5/   backdrop, bg3/bg2/bg1 (parallax 10/30/50%), achter_0-2 en grond_0-2 (3 tegels van 3220 px)
-- game.js      spelregels + 2D-weergave · game3d.js  semi-3D (elke laag een papieren vlak op eigen diepte)
+- `maak_wereld.py` -> `wereld.json`: platformen, bruggen, hellingen, ladders, ankers en waar elk level begint
+- `assets/F/` + `maak_final.py`: start, tutorial, logo (3 wiggle-versies) en papierrand uit Figma `final_foreground`
+- `assets/L1-L5/` + `level1-5.json`: achtergronden en voorgrondtegels per level
+- `game.js` (spel + 2D), `game3d.js` (semi-3D), `wereld.js` (tekeningen, ankers, overvloeien van de achtergronden)
+- `models/`: Blender-modellen; maken met de scripts in `3-design/assets/glb/` (`bouw_gidsen.py` leest `wereld.json`)
 
-Krabbel is een placeholder (krijt-blob); de echte tekening van het kind komt er later in.
-
-Nieuw level toevoegen: lagen uit Figma exporteren (zie memory wereld-speelbaar-2d-3d) en `maak_level.py` draaien.
-
-**3D (nieuw):** grond, gras, water, ravijn en decor zijn Blender-modellen uit `models/`; enkel de lucht is nog een afbeelding (opnieuw maken: `3-design/assets/glb/bouw_grond.py` en `bouw_gras.py` in Blender draaien en de .glb's naar `models/` kopiëren). `grond.html?level=1` toont enkel die modellen.
-
-**Level 0/1 = `final_foreground`** (Figma, pagina LEVELS): startstuk met logo, tutorial, papierrand en level 1 in één wereld, enkel voorgrond. `final.json` + `assets/F/` (opnieuw maken: `maak_final.py <map met exports>`), 3D: `models/voorgrond_levelfinal.glb` (uit `3-design/assets/glb/bouw_tutorial.py`) + grond/gras van level 1. Inkleuren aan/uit en afstand: `wereld.js`. Brug, helling en ladder zijn getekend en speelbaar: loopvlakken, `bruggen`, `hellingen` en `ladders` staan in `final.json`; klimmen met ↑/↓ (spatie = springen). In 3D zijn tekenlijnen en ankers echte vormen aan de voorkant van de platformen (`bouw_gidsen.py` → `models/gidsen_levelfinal.glb`); de papierrand wordt als allerlaatste getekend.
+De achtergrond van een level vloeit geleidelijk in die van het volgende (`OVERVLOEI` in wereld.js).
+De levels schuiven 62 px in elkaar zodat er geen spleet in de grond zit. Krabbel is een placeholder.
