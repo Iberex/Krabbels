@@ -1,0 +1,123 @@
+{
+  "source": {
+    "width": 1920,
+    "height": 1080
+  },
+  "floorY": 951,
+  "anims": {
+    "01_rust": {
+      "left": 816,
+      "top": 437,
+      "width": 289,
+      "height": 528
+    },
+    "02_zweven": {
+      "left": 733,
+      "top": 384,
+      "width": 453,
+      "height": 580
+    },
+    "03_wenken": {
+      "left": 816,
+      "top": 443,
+      "width": 340,
+      "height": 521
+    },
+    "04_zwaaien": {
+      "left": 816,
+      "top": 439,
+      "width": 303,
+      "height": 525
+    },
+    "05_wijzen_rechts": {
+      "left": 743,
+      "top": 411,
+      "width": 451,
+      "height": 553
+    },
+    "06_wijzen_links": {
+      "left": 726,
+      "top": 399,
+      "width": 448,
+      "height": 565
+    },
+    "07_knikken": {
+      "left": 816,
+      "top": 441,
+      "width": 289,
+      "height": 524
+    },
+    "08_tekenen": {
+      "left": 667,
+      "top": 450,
+      "width": 705,
+      "height": 516
+    },
+    "09_armen_wijd": {
+      "left": 767,
+      "top": 442,
+      "width": 385,
+      "height": 523
+    },
+    "10_armen_omhoog": {
+      "left": 769,
+      "top": 398,
+      "width": 382,
+      "height": 567
+    },
+    "11_springen": {
+      "left": 773,
+      "top": 123,
+      "width": 373,
+      "height": 842
+    },
+    "12_bukken": {
+      "left": 773,
+      "top": 429,
+      "width": 374,
+      "height": 537
+    },
+    "13_juichen": {
+      "left": 808,
+      "top": 330,
+      "width": 303,
+      "height": 635
+    },
+    "14_dansje": {
+      "left": 774,
+      "top": 404,
+      "width": 371,
+      "height": 560
+    },
+    "15_oei": {
+      "left": 772,
+      "top": 443,
+      "width": 375,
+      "height": 522
+    },
+    "16_tikken": {
+      "left": 816,
+      "top": 442,
+      "width": 289,
+      "height": 522
+    },
+    "17_buigen": {
+      "left": 745,
+      "top": 435,
+      "width": 360,
+      "height": 530
+    },
+    "18_binnenvliegen": {
+      "left": 777,
+      "top": 296,
+      "width": 1143,
+      "height": 669
+    },
+    "19_gom_stukje_kwijt": {
+      "left": 778,
+      "top": 365,
+      "width": 934,
+      "height": 606
+    }
+  }
+}
