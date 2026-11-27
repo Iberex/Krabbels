@@ -1,0 +1,18 @@
+{
+  "name": "wobbel-poc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Proof of concept: draw a wobbel on an iPad, send it to a level screen and a world screen (fetch + polling).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "seed": "node tools/seed.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.3.0"
+  }
+}
