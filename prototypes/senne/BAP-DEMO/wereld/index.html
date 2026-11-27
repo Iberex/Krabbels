@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Krabbels · wereld (2D en 3D)</title>
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="c2d" width="1920" height="1080"></canvas>
+    <canvas id="c3d"></canvas>
+    <div id="hud">
+      <div class="knoppen">
+        <button id="b2d" class="aan">2D</button>
+        <button id="b3d">3D</button>
+        <button id="bwereld">Hele wereld</button>
+      </div>
+      <div id="hint">← → lopen · ↑ of spatie springen · ↑↓ ladder · <b>V</b> 2D/3D · <b>0–5</b> start/level · <b>W</b> hele wereld · <b>R</b> opnieuw</div>
+      <div id="voortgang"><i id="vbalk"></i></div>
+    </div>
+    <div id="waas"></div>
+    <div id="melding" hidden></div>
+  </div>
+  <script type="module" src="game.js"></script>
+<a class="krabbels-overzicht" href="../" title="Terug naar het overzicht">← overzicht</a><style>.krabbels-overzicht{position:fixed;left:12px;bottom:12px;z-index:99999;font:600 13px/1 Inter,system-ui,-apple-system,'Segoe UI',sans-serif;color:#fff;background:rgba(34,34,34,.72);padding:8px 12px;border-radius:999px;text-decoration:none;opacity:.55}.krabbels-overzicht:hover{opacity:1}</style>
+</body>
+</html>

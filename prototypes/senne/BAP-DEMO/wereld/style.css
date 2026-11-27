@@ -1,0 +1,27 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #1b1b22; overflow: hidden; font-family: "Fredoka", ui-rounded, system-ui, sans-serif; }
+#stage { position: absolute; left: 50%; top: 50%; width: min(100vw, 177.78vh); height: min(56.25vw, 100vh); transform: translate(-50%, -50%); background: #000; }
+#stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#c3d { display: none; }
+#hud { position: absolute; inset: 0; pointer-events: none; }
+.knoppen { position: absolute; top: 14px; right: 14px; display: flex; gap: 8px; pointer-events: auto; }
+button {
+  font: 600 15px/1 inherit; font-family: inherit; color: #2b3f8f; background: #fffdf6; border: 2px solid #34344a;
+  border-radius: 999px; padding: 9px 16px; cursor: pointer; box-shadow: 0 3px 0 rgba(52,52,74,.35);
+}
+button.aan { background: #2b3f8f; color: #fffdf6; }
+button:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(52,52,74,.35); }
+#hint {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 14px; color: #34344a;
+  background: rgba(255,253,246,.92); padding: 8px 16px; border-radius: 999px; border: 2px solid #34344a; white-space: nowrap;
+}
+#voortgang { position: absolute; left: 16px; top: 18px; width: 22%; height: 12px; background: rgba(255,253,246,.85); border: 2px solid #34344a; border-radius: 999px; overflow: hidden; }
+#vbalk { display: block; height: 100%; width: 0; background: #86cc4e; }
+#melding {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); text-align: center; font-size: clamp(22px, 4vw, 52px);
+  color: #34344a; background: #fffdf6; border: 3px solid #34344a; border-radius: 24px; padding: 22px 34px; box-shadow: 0 8px 0 rgba(52,52,74,.3);
+}
+#melding small { display: block; font-size: .42em; margin-top: 8px; opacity: .8; }
+
+/* wit moment bij het door de deur gaan */
+#waas { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .7s ease; }

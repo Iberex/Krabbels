@@ -1,0 +1,26 @@
+:root { --bg: #ffffff; --tekst: #222222; --zacht: #777777; --lijn: #e6e6e6; --hover: #f2f2f2; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #161616; --tekst: #f2f2f2; --zacht: #9a9a9a; --lijn: #2c2c2c; --hover: #202020; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--tekst); font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
+a { color: inherit; }
+.wrap { width: min(860px, calc(100% - 32px)); margin: 0 auto; }
+
+.balk { border-bottom: 1px solid var(--lijn); position: sticky; top: 0; background: var(--bg); z-index: 2; }
+.balk .wrap { display: flex; align-items: center; gap: 20px; min-height: 56px; flex-wrap: wrap; padding: 8px 0; }
+.merk { font-weight: 800; font-size: 18px; text-decoration: none; margin-right: auto; }
+.balk nav { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.balk nav a { text-decoration: none; font-size: 14px; font-weight: 600; color: var(--zacht); }
+.balk nav a:hover { color: var(--tekst); }
+
+.intro { margin: 32px 0 20px; color: var(--zacht); }
+.lijst { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--lijn); }
+.lijst a { display: grid; grid-template-columns: 150px 1fr auto; gap: 12px; align-items: baseline; padding: 14px 8px; border-bottom: 1px solid var(--lijn); text-decoration: none; }
+.lijst a:hover { background: var(--hover); }
+.lijst b { font-size: 16px; }
+.lijst span { color: var(--zacht); font-size: 15px; }
+.lijst time { color: var(--zacht); font-size: 13px; }
+@media (max-width: 560px) { .lijst a { grid-template-columns: 1fr auto; } .lijst span { grid-column: 1 / -1; grid-row: 2; } }
+.klein { color: var(--zacht); font-size: 14px; margin: 18px 0 0; }
+.klein a { color: var(--tekst); }

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Krabbels · alle modellen (glb-test)</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe9f2; font-family: system-ui, sans-serif; }
+    canvas { display: block; }
+    #info { position: fixed; left: 12px; top: 12px; background: #fffdf6; border: 2px solid #34344a; border-radius: 10px; padding: 8px 12px; font-size: 13px; color: #34344a; }
+    #info a { color: #2b3f8f; margin-right: 6px; }
+  </style>
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js",
+                 "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <div id="info">Level: <a href="?level=1">1</a><a href="?level=2">2</a><a href="?level=3">3</a><a href="?level=4">4</a><a href="?level=5">5</a><br>slepen = draaien · scrollen = zoomen<br><span id="status">laden…</span></div>
+  <script type="module">
+    import * as THREE from "three";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const level = Math.max(1, Math.min(5, parseInt(new URLSearchParams(location.search).get("level")) || 1));
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    document.body.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xcfe9f2);
+    // vlak licht: elk vlak krijgt één egale tint
+    scene.add(new THREE.AmbientLight(0xffffff, 2.2));
+    const zon = new THREE.DirectionalLight(0xffffff, 1.2);
+    zon.position.set(4, 8, 10);
+    scene.add(zon);
+    const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 1000);
+    const controls = new OrbitControls(camera, renderer.domElement);
+
+    const lader = new GLTFLoader();
+    Promise.all(["grond", "gras", "water", "ravijn", "decor"].map((n) => lader.loadAsync(`models/${n}_level${level}.glb`).catch(() => null))).then((alle) => {
+      const delen = alle.filter(Boolean); // niet elk level heeft water of een ravijn
+      const gltf = { scene: new THREE.Group() };
+      delen.forEach((d) => gltf.scene.add(d.scene));
+      scene.add(gltf.scene);
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const midden = box.getCenter(new THREE.Vector3()), maat = box.getSize(new THREE.Vector3());
+      controls.target.copy(midden);
+      const afstand = Math.max(maat.x * 0.62, maat.y * 2.2);
+      camera.position.set(midden.x + afstand * 0.22, midden.y + afstand * 0.22, afstand);
+      controls.update();
+      let meshes = 0, driehoeken = 0;
+      gltf.scene.traverse((o) => { if (o.isMesh) { meshes++; driehoeken += o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3; } });
+      document.getElementById("status").textContent = `geladen: ${meshes} meshes, ${Math.round(driehoeken)} driehoeken, ${maat.x.toFixed(1)} × ${maat.y.toFixed(1)} × ${maat.z.toFixed(2)} m`;
+      window.__grond = { gltf, camera, controls, maat };
+    }).catch((e) => { document.getElementById("status").textContent = "fout: " + e.message; });
+
+    addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+    renderer.setAnimationLoop(() => renderer.render(scene, camera));
+  </script>
+<a class="krabbels-overzicht" href="../" title="Terug naar het overzicht">← overzicht</a><style>.krabbels-overzicht{position:fixed;left:12px;bottom:12px;z-index:99999;font:600 13px/1 Inter,system-ui,-apple-system,'Segoe UI',sans-serif;color:#fff;background:rgba(34,34,34,.72);padding:8px 12px;border-radius:999px;text-decoration:none;opacity:.55}.krabbels-overzicht:hover{opacity:1}</style>
+</body>
+</html>

@@ -1,0 +1,538 @@
+/* Krabbels – Drawing Life. Colours match the level prototype. */
+:root {
+  --paper: #fbfaf4;
+  --sheet: #fffef9;
+  --ink: #1f2340;
+  --grid: rgba(84, 168, 205, 0.5);
+  --tape: rgba(236, 222, 178, 0.85);
+  --green: #4cc38a;
+  --yellow: #fdc73a;
+  --current: #1f2340; /* the selected crayon, set from main.js */
+  --vh: 100vh;
+  --pad: clamp(12px, 2.4vmin, 28px);
+  --gap: clamp(6px, 1.2vmin, 12px);
+  /* Big buttons, but never so big that the toolbar runs off a short screen */
+  --btn: clamp(40px, min(7.4vmin, calc((var(--vh) - 150px) / 10.5)), 78px);
+}
+@supports (height: 100dvh) {
+  :root {
+    --vh: 100dvh;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Fredoka", ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-weight: 500;
+  /* iPad: no text selection, no callouts, no scrolling or zooming while drawing */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-appearance: none;
+  appearance: none;
+}
+button svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Full-window canvases. Pixel sizes are set from main.js. */
+canvas.layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+#world {
+  z-index: 0;
+}
+#fx {
+  z-index: 30;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen 1: drawing                                                    */
+/* ------------------------------------------------------------------ */
+#drawScreen {
+  --toolbar-w: calc(var(--btn) * 2 + var(--gap) + var(--pad) * 1.4);
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--pad) * 1.2);
+  padding: var(--pad);
+  padding-left: max(var(--pad), env(safe-area-inset-left));
+  padding-right: max(var(--pad), env(safe-area-inset-right));
+  background: rgba(251, 250, 244, 0.88); /* the world shows faintly behind */
+  transition: opacity 0.35s ease, visibility 0s linear 0s;
+}
+#drawScreen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.35s ease, visibility 0s linear 0.35s;
+}
+
+/* The sheet of paper. Not rotated, so pointer positions map 1:1. */
+#sheet {
+  --s: min(calc(var(--vh) - var(--pad) * 2), calc(100vw - var(--toolbar-w) - var(--pad) * 3.4));
+  position: relative;
+  flex: none;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 6px;
+  background-color: var(--sheet);
+  background-image: linear-gradient(rgba(84, 168, 205, 0.13) 1.5px, transparent 1.5px),
+    linear-gradient(90deg, rgba(84, 168, 205, 0.13) 1.5px, transparent 1.5px);
+  background-size: calc(var(--s) / 24) calc(var(--s) / 24);
+  background-position: calc(var(--s) / 48) calc(var(--s) / 48);
+  box-shadow: 3px 8px 22px rgba(31, 35, 64, 0.22);
+}
+
+#hint {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+#hintCircle {
+  fill: none;
+  stroke: rgba(84, 168, 205, 0.75);
+  stroke-width: 0.9;
+  stroke-dasharray: 0.1 3.4;
+  stroke-linecap: round;
+}
+#hint.faded {
+  opacity: 0.35;
+}
+
+#drawCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.tape {
+  position: absolute;
+  top: -12px;
+  width: 22%;
+  height: 26px;
+  background: var(--tape);
+  pointer-events: none;
+}
+.tape-left {
+  left: 6%;
+  transform: rotate(-4deg);
+}
+.tape-right {
+  right: 6%;
+  transform: rotate(3deg);
+}
+
+/* Toolbar: a paper card. Landscape = a column on the right. */
+#toolbar {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--gap) * 1.6);
+  padding: calc(var(--pad) * 0.7);
+  border-radius: 18px;
+  background: var(--sheet);
+  box-shadow: 2px 6px 18px rgba(31, 35, 64, 0.18);
+}
+#toolbar::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 46%;
+  height: 22px;
+  transform: translateX(-50%) rotate(2deg);
+  background: var(--tape);
+}
+
+.group {
+  display: grid;
+  grid-template-columns: repeat(2, var(--btn));
+  gap: var(--gap);
+  justify-items: center;
+}
+#sizes button:last-child:nth-child(odd) {
+  grid-column: span 2;
+}
+
+/* Crayon colours */
+.swatch {
+  width: var(--btn);
+  height: var(--btn);
+  display: grid;
+  place-items: center;
+  transition: transform 0.15s ease;
+}
+.swatch span {
+  width: 76%;
+  height: 76%;
+  border-radius: 46% 54% 50% 50% / 54% 46% 54% 46%;
+  background-color: var(--c);
+  background-image: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.2) 0 2px, transparent 2px 6px);
+  box-shadow: inset -3px -4px 0 rgba(0, 0, 0, 0.13), inset 3px 3px 0 rgba(255, 255, 255, 0.22);
+  transition: box-shadow 0.15s ease;
+}
+.swatch.selected {
+  transform: scale(1.12);
+}
+.swatch.selected span {
+  box-shadow: inset -3px -4px 0 rgba(0, 0, 0, 0.13), 0 0 0 3px var(--sheet), 0 0 0 6px var(--ink);
+}
+
+/* Brush sizes: dots in the current colour */
+.size,
+.tool {
+  width: var(--btn);
+  height: var(--btn);
+  border-radius: 16px;
+  background: #fffaf0;
+  box-shadow: 0 2px 0 rgba(31, 35, 64, 0.15), inset 0 0 0 2px rgba(31, 35, 64, 0.12);
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+.size {
+  display: grid;
+  place-items: center;
+}
+.size span {
+  display: block;
+  border-radius: 50%;
+  background: var(--current);
+}
+.tool {
+  padding: 15%;
+}
+.size.selected,
+.tool.selected {
+  background: #fff3c4;
+  box-shadow: inset 0 0 0 3px var(--ink);
+}
+.swatch:active,
+.size:active,
+.tool:active {
+  transform: scale(0.92);
+}
+
+#timer {
+  width: var(--btn);
+  height: var(--btn);
+}
+#timer.hurry {
+  animation: pulse 0.8s ease-in-out infinite;
+}
+
+/* The big green "done" button */
+#doneBtn {
+  width: calc(var(--btn) * 2 + var(--gap));
+  height: calc(var(--btn) * 1.25);
+  padding: calc(var(--btn) * 0.18) 0;
+  border-radius: 999px;
+  background: var(--green);
+  box-shadow: 0 5px 0 #2f9a68, 0 8px 14px rgba(31, 35, 64, 0.2);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+#doneBtn:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #2f9a68, 0 4px 8px rgba(31, 35, 64, 0.2);
+}
+
+.shake {
+  animation: shake 0.5s ease;
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  20% { transform: translateX(-9px) rotate(-3deg); }
+  40% { transform: translateX(8px) rotate(3deg); }
+  60% { transform: translateX(-6px) rotate(-2deg); }
+  80% { transform: translateX(4px) rotate(1deg); }
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+/* Small round button in a corner (back to the world, close the camera) */
+.corner {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--sheet);
+  box-shadow: 0 2px 8px rgba(31, 35, 64, 0.2);
+  opacity: 0.55;
+}
+
+/* Portrait (iPad upright): sheet on top, toolbar below in one or two rows */
+@media (orientation: portrait) {
+  #drawScreen {
+    --toolbar-h: calc(var(--btn) * 2 + var(--gap) + var(--pad) * 1.4);
+    flex-direction: column;
+  }
+  #sheet {
+    --s: min(calc(100vw - var(--pad) * 2), calc(var(--vh) - var(--toolbar-h) - var(--pad) * 3.4));
+  }
+  #toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 100%;
+  }
+  #colors {
+    grid-template-columns: repeat(4, var(--btn));
+  }
+  #doneBtn {
+    width: calc(var(--btn) * 1.7);
+    height: calc(var(--btn) * 2 + var(--gap));
+    padding: 0 calc(var(--btn) * 0.25);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen 2: world buttons                                              */
+/* ------------------------------------------------------------------ */
+#worldUi {
+  position: fixed;
+  top: max(18px, env(safe-area-inset-top));
+  right: max(18px, env(safe-area-inset-right));
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: opacity 0.3s ease;
+}
+#worldUi.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.round {
+  width: clamp(52px, 8vmin, 72px);
+  height: clamp(52px, 8vmin, 72px);
+  padding: 10px;
+  border-radius: 50%;
+  background: var(--sheet);
+  box-shadow: 0 4px 0 rgba(31, 35, 64, 0.14), 0 6px 16px rgba(31, 35, 64, 0.2);
+  transition: transform 0.12s ease;
+}
+.round.big {
+  width: clamp(72px, 12vmin, 104px);
+  height: clamp(72px, 12vmin, 104px);
+  padding: 12px;
+  background: var(--yellow);
+  animation: float 2.6s ease-in-out infinite;
+}
+.round:active {
+  transform: scale(0.92);
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-6px) rotate(3deg); }
+}
+
+/* ------------------------------------------------------------------ */
+/* Scan (optional)                                                      */
+/* ------------------------------------------------------------------ */
+#scanScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: #000;
+}
+#scanVideo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+#scanFrame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--frame, 72vmin);
+  height: var(--frame, 72vmin);
+  transform: translate(-50%, -50%);
+  border: 5px dashed #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+#scanHint {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%) rotate(-1deg);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 10px 12px;
+  border-radius: 12px;
+  background: var(--sheet);
+  font-size: 18px;
+  white-space: nowrap;
+}
+#scanHint svg {
+  width: 36px;
+  height: 36px;
+}
+#captureBtn {
+  position: absolute;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: 96px;
+  height: 96px;
+  padding: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.4);
+}
+#captureBtn:active {
+  transform: translateX(-50%) scale(0.92);
+}
+#scanScreen .corner {
+  opacity: 0.9;
+}
+
+/* ------------------------------------------------------------------ */
+/* Debug + sticker preview + messages                                   */
+/* ------------------------------------------------------------------ */
+#debugInfo {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 45;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  font: 12px/1.5 ui-monospace, Menlo, monospace;
+  pointer-events: none;
+  display: none;
+}
+body.debug #debugInfo {
+  display: block;
+}
+
+#stickerPanel {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 45;
+  display: none;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 12px;
+  border-radius: 10px;
+  background: #e9e6dc;
+  box-shadow: 0 6px 18px rgba(31, 35, 64, 0.25);
+  pointer-events: none;
+}
+#stickerPanel canvas {
+  display: block;
+  max-height: 30vh;
+  max-width: 22vw;
+  width: auto;
+  height: auto;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+#stickerPanel canvas.bw {
+  image-rendering: pixelated;
+}
+/* Shown briefly after an export; in debug mode it stays, with the black-and-white version too. */
+#stickerPanel.show,
+body.debug #stickerPanel.filled {
+  display: flex;
+}
+body:not(.debug) #stickerPanel canvas.bw {
+  display: none;
+}
+
+/* Centered message card (errors, camera…), like the level prototype */
+#message {
+  position: fixed;
+  left: 50%;
+  top: 40%;
+  z-index: 50;
+  transform: translate(-50%, -50%) rotate(-1deg);
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 22px 24px 18px;
+  border-radius: 10px;
+  background: #fdfcf6;
+  color: var(--ink);
+  box-shadow: 2px 6px 16px rgba(31, 35, 64, 0.22);
+  font-size: 18px;
+  line-height: 1.45;
+  text-align: center;
+  display: none;
+}
+#message::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 120px;
+  height: 22px;
+  transform: translateX(-50%) rotate(2deg);
+  background: var(--tape);
+}
+#message.visible {
+  display: block;
+}
+#message.error {
+  border: 3px solid #f04e45;
+}
+#message small {
+  display: block;
+  margin-top: 8px;
+  opacity: 0.6;
+}

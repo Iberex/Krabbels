@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UX-demo 2</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #e9e6df; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: #2a2a2a; }
+    #film { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #info { position: absolute; left: 14px; top: 14px; max-width: min(330px, calc(100% - 28px)); background: rgba(255, 255, 255, 0.9); border-radius: 14px; padding: 12px 16px; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06); }
+    #titel { font-weight: 800; font-size: 16px; }
+    #uitleg { font-size: 13px; color: #555; margin-top: 3px; line-height: 1.4; }
+    #bediening { position: absolute; left: 0; right: 0; bottom: 0; height: 92px; background: #fff; border-top: 1px solid #dcd7cc; display: flex; flex-direction: column; gap: 6px; padding: 10px 16px; }
+    .rij { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+    button { border: 2px solid #ddd8cc; background: #fff; border-radius: 999px; padding: 4px 12px; font: 700 13px Inter, system-ui, sans-serif; cursor: pointer; color: #2a2a2a; white-space: nowrap; }
+    button.on { background: #2a2a2a; color: #fff; border-color: #2a2a2a; }
+    #hoofdstukken { display: flex; gap: 4px; overflow-x: auto; }
+    #hoofdstukken button span { display: none; margin-left: 6px; font-weight: 600; }
+    #hoofdstukken button.on span { display: inline; }
+    .lijn { position: relative; flex: 1; }
+    #tijdlijn { width: 100%; margin: 0; }
+    #markers { position: absolute; left: 0; right: 0; top: -14px; height: 12px; pointer-events: none; }
+    #markers i { position: absolute; transform: translateX(-50%); font: 700 10px Inter, system-ui, sans-serif; color: #999; font-style: normal; }
+    #tijd { font: 600 13px Inter, system-ui, sans-serif; color: #777; min-width: 92px; text-align: right; }
+    .schoon #bediening, .schoon #info { display: none; }
+    @media (max-width: 1100px) { #info { display: none; } }
+    @media (max-width: 700px) { #hoofdstukken button span { display: none !important; } }
+  </style>
+</head>
+<body>
+  <canvas id="film"></canvas>
+  <div id="info"><div id="titel"></div><div id="uitleg"></div></div>
+  <div id="bediening">
+    <div class="rij">
+      <button id="vorige" title="Vorige scène (←)">←</button>
+      <button id="speel" title="Afspelen / pauze (spatie)">❚❚</button>
+      <button id="volgende" title="Volgende scène (→)">→</button>
+      <div id="hoofdstukken"></div>
+      <span style="flex:1"></span>
+      <button id="zoom" title="Inzoomen op een toestel (Z), of klik op een toestel">Overzicht</button>
+      <button id="traag" title="Halve snelheid">0,5×</button>
+      <button id="duo" title="Solo of duo (D)">Solo</button>
+    </div>
+    <div class="rij">
+      <div class="lijn"><div id="markers"></div><input type="range" id="tijdlijn" min="0" max="1000" value="0" /></div>
+      <span id="tijd"></span>
+    </div>
+  </div>
+  <script type="module" src="js/verhaal.js?v=20261117g"></script>
+<a class="krabbels-overzicht" href="../" title="Terug naar het overzicht">← overzicht</a><style>.krabbels-overzicht{position:fixed;left:12px;bottom:12px;z-index:99999;font:600 13px/1 Inter,system-ui,-apple-system,'Segoe UI',sans-serif;color:#fff;background:rgba(34,34,34,.72);padding:8px 12px;border-radius:999px;text-decoration:none;opacity:.55}.krabbels-overzicht:hover{opacity:1}</style>
+</body>
+</html>

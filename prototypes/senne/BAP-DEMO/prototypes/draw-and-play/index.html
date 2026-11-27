@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Krabbels · Draw and Play</title>
+  <!-- Fonts: Lilita One for the KRABBELS logo and numbers, Fredoka for the rest -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Lilita+One&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Webcam feed. Hidden: we draw it onto the canvas ourselves (mirrored + dimmed). -->
+  <video id="webcam" playsinline muted autoplay></video>
+
+  <!-- The level game: everything is drawn on this one canvas. -->
+  <canvas id="game"></canvas>
+
+  <!-- Attract screen: 1 or 2 players (icons, no text). -->
+  <section id="modeScreen" class="hidden">
+    <button id="onePlayer" class="mode" aria-label="1 speler">
+      <svg viewBox="0 0 96 96" fill="none" stroke="#1f2340" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="48" cy="24" r="10" fill="#fdc73a" />
+        <path d="M48 34 V60 M48 60 L38 82 M48 60 L58 82 M48 42 L32 52 M48 42 L64 52" />
+      </svg>
+    </button>
+    <button id="twoPlayers" class="mode" aria-label="2 spelers">
+      <svg viewBox="0 0 96 96" fill="none" stroke="#1f2340" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="30" cy="24" r="10" fill="#fdc73a" />
+        <path d="M30 34 V60 M30 60 L21 82 M30 60 L39 82 M30 42 L16 52 M30 42 L44 50" />
+        <circle cx="66" cy="24" r="10" fill="#ff8ab3" />
+        <path d="M66 34 V60 M66 60 L57 82 M66 60 L75 82 M66 42 L52 50 M66 42 L80 52" />
+      </svg>
+    </button>
+  </section>
+
+  <!-- Ready: tap to play (or just step in). -->
+  <button id="playBtn" class="hidden" aria-label="Spelen">
+    <svg viewBox="0 0 48 48"><path d="M18 13 L36 24 L18 35 Z" fill="#ffffff" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" /></svg>
+  </button>
+
+  <!-- The drawing screen (drawing.js). -->
+  <section id="drawScreen" class="hidden">
+    <button id="closeBtn" class="corner" aria-label="Terug naar het begin">
+      <svg viewBox="0 0 48 48" fill="none" stroke="#1f2340" stroke-width="4" stroke-linecap="round"><path d="M15 15 L33 33 M33 15 L15 33" /></svg>
+    </button>
+
+    <!-- 2 players: whose turn it is -->
+    <div id="playerBadge" hidden>
+      <svg class="figure" viewBox="0 0 48 48" fill="none" stroke="#1f2340" stroke-width="3.5" stroke-linecap="round"><circle cx="24" cy="13" r="7" fill="#fdc73a" /><path d="M24 20 V32 M24 32 L17 43 M24 32 L31 43 M24 25 L14 31 M24 25 L34 31" /></svg>
+      <svg class="figure" viewBox="0 0 48 48" fill="none" stroke="#1f2340" stroke-width="3.5" stroke-linecap="round"><circle cx="24" cy="13" r="7" fill="#ff8ab3" /><path d="M24 20 V32 M24 32 L17 43 M24 32 L31 43 M24 25 L14 31 M24 25 L34 31" /></svg>
+    </div>
+
+    <div id="sheet">
+      <!-- A gentle hint of where to draw. Not a template. -->
+      <svg id="hint" viewBox="0 0 100 100" aria-hidden="true"><circle id="hintCircle" cx="50" cy="50" r="34" /></svg>
+      <canvas id="drawCanvas"></canvas>
+      <!-- Googly eyes the child sticks on: kept apart from the strokes, so they stay round and the eraser can't touch them -->
+      <canvas id="eyeCanvas"></canvas>
+      <span class="tape tape-left"></span>
+      <span class="tape tape-right"></span>
+    </div>
+
+    <div id="toolbar">
+      <div id="colors" class="group"></div>
+      <div id="sizes" class="group"></div>
+      <div id="tools" class="group">
+        <button id="eraserBtn" class="tool" aria-label="Gom">
+          <svg viewBox="0 0 48 48" fill="none" stroke="#1f2340" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 30.5 L23.5 14 a4 4 0 0 1 5.7 0 l7 7 a4 4 0 0 1 0 5.7 L25 38 H14.5 z" fill="#ff8ab3" />
+            <path d="M7 30.5 L14.5 38 H25 L29 34 L18.5 23.5 z" fill="#fdfcf6" />
+            <path d="M25 38 H41" />
+          </svg>
+        </button>
+        <button id="undoBtn" class="tool" aria-label="Ongedaan maken">
+          <svg viewBox="0 0 48 48" fill="none" stroke="#1f2340" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 11 L9 19 L17 27" />
+            <path d="M9 19 H28 a9.5 9.5 0 0 1 0 19 H19" />
+          </svg>
+        </button>
+        <button id="clearBtn" class="tool" aria-label="Alles wissen">
+          <svg viewBox="0 0 48 48" fill="none" stroke="#1f2340" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 14 L15.5 38.5 a3 3 0 0 0 3 2.5 H29.5 a3 3 0 0 0 3 -2.5 L35 14" fill="#fdfcf6" />
+            <path d="M9 14 H39" />
+            <path d="M19 14 V9.5 H29 V14" />
+            <path d="M20.5 20 V34 M27.5 20 V34" />
+          </svg>
+        </button>
+        <button id="eyeBtn" class="tool" aria-label="Wiebeloog">
+          <svg viewBox="0 0 48 48" fill="none" stroke="#1f2340" stroke-width="3">
+            <circle cx="16" cy="24" r="10" fill="#ffffff" />
+            <circle cx="34" cy="24" r="9" fill="#ffffff" />
+            <circle cx="17.5" cy="27" r="4.6" fill="#111111" stroke="none" />
+            <circle cx="35.5" cy="27" r="4.2" fill="#111111" stroke="none" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Optional timer: a yellow circle that shrinks (CONFIG.timer). -->
+      <div id="timer" hidden>
+        <svg viewBox="0 0 48 48">
+          <circle cx="24" cy="24" r="21" fill="none" stroke="#1f2340" stroke-opacity="0.3" stroke-width="2" stroke-dasharray="3 4" />
+          <circle id="timerFill" cx="24" cy="24" r="18" fill="#fdc73a" />
+        </svg>
+      </div>
+
+      <button id="doneBtn" aria-label="Klaar">
+        <svg viewBox="0 0 48 48" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 25 L20.5 33.5 L36 15" /></svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- On top of everything: the drawing flying into the world, and its sparkle trail. -->
+  <canvas id="fx"></canvas>
+
+  <!-- Readable messages (loading, camera blocked, model failed...). -->
+  <div id="message" class="visible">Even geduld…</div>
+
+  <!-- Opening index.html straight from disk (file://) blocks ES modules and the webcam.
+       This tiny non-module script makes sure you get a clear message instead of a blank page. -->
+  <script>
+    if (location.protocol === "file:") {
+      document.getElementById("message").innerHTML =
+        "<strong>Open deze pagina via een lokale server.</strong><br>" +
+        "In VS Code: rechtsklik op index.html → <em>Open with Live Server</em>.<br>" +
+        "Rechtstreeks openen (file://) blokkeert de camera en de scripts.";
+    }
+  </script>
+
+  <script type="module" src="main.js"></script>
+<a class="krabbels-overzicht" href="../../" title="Terug naar het overzicht">← overzicht</a><style>.krabbels-overzicht{position:fixed;left:12px;bottom:12px;z-index:99999;font:600 13px/1 Inter,system-ui,-apple-system,'Segoe UI',sans-serif;color:#fff;background:rgba(34,34,34,.72);padding:8px 12px;border-radius:999px;text-decoration:none;opacity:.55}.krabbels-overzicht:hover{opacity:1}</style>
+</body>
+</html>
