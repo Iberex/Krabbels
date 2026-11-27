@@ -12,10 +12,24 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.existing(this.block);
     this.block.body.setCollideWorldBounds(true);
     this.physics.add.collider(this.block, this.platform);
+    this.arrows = this.input.keyboard.createCursorKeys();
+
 
   }
 
 
-  update() {
+   update() {
+    if (this.arrows.left.isDown) {
+      this.block.body.setVelocityX(-250);
+    } else if (this.arrows.right.isDown) {
+      this.block.body.setVelocityX(250);
+    } else {
+      this.block.body.setVelocityX(0);
+    }
+
+    if (this.arrows.up.isDown && this.block.body.blocked.down) {
+      this.block.body.setVelocityY(-450);
+    }
   }
+
 }
