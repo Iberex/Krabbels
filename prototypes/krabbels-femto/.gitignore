@@ -1,0 +1,7 @@
+bridge/venv/
+bridge/bridge.log*
+bridge/__pycache__/
+vendor/
+sdk/
+__pycache__/
+.DS_Store
