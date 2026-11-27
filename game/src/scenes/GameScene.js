@@ -5,8 +5,11 @@ export class GameScene extends Phaser.Scene {
     super('game');
   }
 
-  create() {
+    create() {
+    this.platform = this.add.rectangle(400, 400, 600, 30, 0x333333);
+    this.physics.add.existing(this.platform, true);
   }
+
 
   update() {
   }
