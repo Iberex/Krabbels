@@ -1,8 +1,5 @@
-function create() {
-}
-
-function update() {
-}
+import * as Phaser from 'phaser';
+import { GameScene } from './scenes/GameScene.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -13,7 +10,7 @@ const config = {
     default: 'arcade',
     arcade: { gravity: { y: 900 } }
   },
-  scene: { create: create, update: update }
+  scene: [GameScene]
 };
 
 new Phaser.Game(config);
