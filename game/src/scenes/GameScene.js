@@ -39,6 +39,9 @@ export class GameScene extends Phaser.Scene {
       fontSize: "24px",
       color: "#333333",
     });
+    (level.walls ?? []).forEach((wall) => {
+      this.addSolid(x + wall.x, wall.top - wall.h, wall.w, wall.h);
+    });
   }
 
   addSolid(x, y, w, h) {
