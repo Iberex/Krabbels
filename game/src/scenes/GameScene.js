@@ -25,6 +25,7 @@ export class GameScene extends Phaser.Scene {
     this.solid = this.physics.add.staticGroup();
     this.physics.add.collider(this.block, this.solid);
     this.ladders = [];
+    this.gate = null;
 
     LEVELS.forEach((level, i) => this.buildLevel(level, i));
 
@@ -75,6 +76,11 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(0);
       this.ladders.push(rect);
     });
+    if (level.gate) {
+      this.gate = this.add
+        .rectangle(x + level.gate.x, level.gate.top - 80, 40, 80, 0x2e86ab)
+        .setOrigin(0);
+    }
   }
 
   addSolid(x, y, w, h) {
@@ -162,6 +168,10 @@ export class GameScene extends Phaser.Scene {
     if (this.block.y > height + 50) {
       const start = LEVELS[this.level - 1].ground[0];
       this.block.body.reset(this.pageX + start.x + 40, start.top - 40);
+    }
+    if (this.gate && this.block.x > this.gate.x + 20) {
+      this.scene.start("end");
+      return;
     }
 
     if (this.block.x > this.pageX + width + 20) {
