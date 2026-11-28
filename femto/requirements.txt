@@ -1,0 +1,3 @@
+pykinect_azure
+opencv-python
+numpy
