@@ -29,6 +29,7 @@ Daarna bouw je vijf levels. Elk level is één scherm met twee obstakels: een ga
   - [Stap 15: bukken](#stap-15-bukken)
   - [Stap 16: level 3 en 4](#stap-16-level-3-en-4)
   - [Stap 17: level 5, de poort en het eindscherm](#stap-17-level-5-de-poort-en-het-eindscherm)
+  - [Stap 18: scherpe tekst met HTML](#stap-18-scherpe-tekst-met-html)
 - [Klaar met deze fase](#klaar-met-deze-fase)
 - [Werkt het niet?](#werkt-het-niet)
 
@@ -970,13 +971,13 @@ Een gat is gewoon een plek **zonder** grond. Vervang daarom het eerste level doo
 ```javascript
 {
   ground: [
-    { x: 0, w: 100, top: LOW },
-    { x: 300, w: 500, top: LOW },
+    { x: 0, w: 187, top: LOW },
+    { x: 387, w: 413, top: LOW },
   ],
 },
 ```
 
-Het gat loopt van `x = 100` tot `x = 300`.
+Het gat loopt van `x = 187` tot `x = 387`.
 
 ### 12.2 De onderrand openzetten
 
@@ -1027,15 +1028,16 @@ Geef het eerste level een lijst `walls`:
 ```javascript
 {
   ground: [
-    { x: 0, w: 100, top: LOW },
-    { x: 300, w: 500, top: LOW },
+    { x: 0, w: 187, top: LOW },
+    { x: 387, w: 413, top: LOW },
   ],
-  walls: [{ x: 580, w: 40, h: 70, top: LOW }],
+  walls: [{ x: 573, w: 40, h: 70, top: LOW }],
 },
 ```
 
 - `h: 70` is de hoogte van het muurtje. Je springt ongeveer 112 hoog, dus dat lukt.
 - `top: LOW` zegt op welke grond het muurtje staat.
+- Het gat en het muurtje staan zo dat je overal evenveel loopruimte hebt: van het begin tot het gat (0 tot 187), van het gat tot het muurtje (387 tot 573) en van het muurtje tot de rand (613 tot 800). Het scherm is 800 breed, min 200 voor het gat en 40 voor het muurtje, laat 560 over. Gedeeld door 3 is dat ongeveer 187.
 
 ### 13.2 Muurtjes bouwen
 
@@ -1637,10 +1639,10 @@ export const HIGH = 255;
 export const LEVELS = [
   {
     ground: [
-      { x: 0, w: 100, top: LOW },
-      { x: 300, w: 500, top: LOW },
+      { x: 0, w: 187, top: LOW },
+      { x: 387, w: 413, top: LOW },
     ],
-    walls: [{ x: 580, w: 40, h: 70, top: LOW }],
+    walls: [{ x: 573, w: 40, h: 70, top: LOW }],
   },
   {
     ground: [
@@ -1809,6 +1811,100 @@ export class GameScene extends Phaser.Scene {
 }
 ```
 
+## Stap 18: scherpe tekst met HTML
+
+De tekst `Level 1`, `Level 2`, ... en `Einde` ziet er in Phaser wazig uit. In deze stap haal je de tekst uit Phaser en zet je hem als gewone HTML bovenop het spel.
+
+**Waarom is Phaser-tekst wazig?**
+
+- Het canvas is altijd 800 bij 450 pixels, zo staat het in `src/main.js`.
+- `Phaser.Scale.ENVELOP` (stap 5) maakt het canvas **niet** groter in pixels. Het rekt het canvas met CSS uit tot het venster, bijvoorbeeld 1920 bij 1080. De browser vergroot dus een klein plaatje, en een vergroot plaatje wordt zacht. Dat geldt voor alles in het canvas, ook voor tekst.
+- Een hogere `resolution` in de tekststijl helpt niet. De tekst wordt daarna toch in hetzelfde canvas van 800 bij 450 getekend, dus de extra pixels gaan verloren.
+- Terwijl de camera schuift (`pan`), staat de tekst ook op halve pixels. Dat maakt hem nog wat waziger.
+
+**Waarom HTML wel scherp is:** de browser tekent HTML-tekst op de echte resolutie van het scherm, los van het canvas. Je stijlt hem bovendien met gewone CSS. Het spel toont altijd maar één level tegelijk, dus één titel bovenaan volstaat. `showPage()` past de tekst aan bij elk nieuw level.
+
+### 18.1 De titel in `index.html`
+
+Zet binnen `<body>`, boven de regel met `<script>`:
+
+```html
+<div id="title"></div>
+```
+
+Voeg in `<style>` toe, onder de regel voor `body`:
+
+```css
+#title {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: Georgia, serif;
+  font-size: 28px;
+  letter-spacing: 4px;
+  color: #333333;
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 5;
+}
+
+#title.end {
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 56px;
+  letter-spacing: 8px;
+  opacity: 1;
+}
+```
+
+- `position: fixed` zet de titel vast op het venster, los van hoe groot het canvas wordt.
+- `left: 50%` en `translateX(-50%)` zetten het **midden** van de titel in het midden van het venster.
+- `pointer-events: none` zorgt dat de titel geen klikken opvangt.
+- `z-index: 5` legt de titel boven het canvas.
+- `top: 56px` laat ruimte voor de testknoppen bovenaan. Haal je die weg bij de merge, dan mag dit `24px` worden.
+- `#title.end` is de stijl voor het eindscherm: groot en in het midden van het scherm. Die stijl geldt alleen als de titel de class `end` heeft.
+
+### 18.2 De titel aanpassen in `GameScene.js`
+
+Haal in `buildLevel()` de regel `this.add.text(...)` voor `Level ...` weg.
+
+Zet onderaan in `showPage()`:
+
+```javascript
+const title = document.getElementById('title');
+title.textContent = `Level ${this.level}`;
+title.classList.remove('end');
+```
+
+- `document.getElementById('title')` zoekt de `<div>` uit `index.html`.
+- `textContent` zet de tekst in die `<div>`.
+- `classList.remove('end')` haalt de eindscherm-stijl weg. Die staat er nog als je na het eindscherm opnieuw in level 1 begint.
+
+### 18.3 De titel aanpassen in `EndScene.js`
+
+Vervang in `create()` de regel `this.add.text(...)` door:
+
+```javascript
+const title = document.getElementById('title');
+title.textContent = 'Einde';
+title.classList.add('end');
+```
+
+`classList.add('end')` zet de stijl `#title.end` aan: de titel wordt groot en schuift naar het midden.
+
+**Test:**
+
+1. Maak het venster groot of zet het op volledig scherm. `Level 1` staat scherp bovenaan in het midden.
+2. Loop naar level 2: de titel verandert in `Level 2`.
+3. Loop door de poort: `Einde` staat groot in het midden. Na 3 seconden staat er weer `Level 1` bovenaan.
+
+```bash
+git add game/index.html game/src
+git commit -m "Sharp HTML title"
+git push
+```
+
 ## Klaar met deze fase
 
 Werkt alles, dan zet je de branch in `main`:
@@ -1840,5 +1936,6 @@ git push
 - **Het blokje zweeft of zakt in de grond bij het bukken (stap 15):** `setOrigin(0.5, 1)` ontbreekt bij het blokje.
 - **Het blokje blijft altijd gebukt (stap 15):** controleer de getallen in `overlapRect`: `this.block.x - 18`, `this.block.y - 40`, `36`, `20`, `false`, `true`.
 - **Niets gebeurt bij de poort (stap 17):** staat `EndScene` in de lijst `scene` in `main.js`? En heet de scène in `super(...)` exact `'end'`?
+- **`Cannot set properties of null` (stap 18):** `<div id="title">` ontbreekt in `index.html`, of de id is anders gespeld.
 - **Wit scherm:** open de console in Chrome (`Cmd + Option + J`) en lees de rode foutmelding.
 - **`Missing script: "dev"`:** je staat niet in de map `game`.

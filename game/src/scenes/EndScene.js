@@ -6,15 +6,10 @@ export class EndScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
-
-    this.add
-      .text(width / 2, height / 2, "Einde", {
-        fontSize: "48px",
-        color: "#333333",
-      })
-      .setOrigin(0.5);
-
     this.time.delayedCall(3000, () => this.scene.start("game"));
+
+    const title = document.getElementById("title");
+    title.textContent = "Einde";
+    title.classList.add("end");
   }
 }

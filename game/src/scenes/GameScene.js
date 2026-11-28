@@ -54,10 +54,6 @@ export class GameScene extends Phaser.Scene {
       this.addSolid(x + ground.x, ground.top, ground.w, height - ground.top);
     });
 
-    this.add.text(x + 20, 20, `Level ${i + 1}`, {
-      fontSize: "24px",
-      color: "#333333",
-    });
     (level.walls ?? []).forEach((wall) => {
       this.addSolid(x + wall.x, wall.top - wall.h, wall.w, wall.h);
     });
@@ -126,12 +122,17 @@ export class GameScene extends Phaser.Scene {
       true,
       false,
     );
+
+    const title = document.getElementById("title");
+    title.textContent = `Level ${this.level}`;
+    title.classList.remove("end");
   }
 
   update() {
     if (this.arrows.left.isDown) {
       this.block.body.setVelocityX(-250);
-    } else if (this.arrows.right.isDown) {
+      // TESTMENU: verwijderen bij merge, terug naar alleen this.arrows.right.isDown
+    } else if (this.arrows.right.isDown || this.autoWalk) {
       this.block.body.setVelocityX(250);
     } else {
       this.block.body.setVelocityX(0);
