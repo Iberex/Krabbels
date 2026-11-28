@@ -20,14 +20,15 @@ export class GameScene extends Phaser.Scene {
     this.arrows = this.input.keyboard.createCursorKeys();
 
     this.buildPage();
+    this.showPage();
   }
 
   buildPage() {
     const { width, height } = this.scale;
-    this.pageX = (this.level - 1) * width;
+    const x = (this.level - 1) * width;
 
     const platform = this.add.rectangle(
-      this.pageX + width / 2,
+      x + width / 2,
       height - 30,
       width,
       30,
@@ -36,15 +37,39 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.existing(platform, true);
     this.physics.add.collider(this.block, platform);
 
-    this.add.text(this.pageX + 20, 20, `Scène ${this.level}`, {
+    this.add.text(x + 20, 20, `Scène ${this.level}`, {
       fontSize: "24px",
       color: "#333333",
     });
 
-    this.physics.world.setBounds(this.pageX, 0, width, height);
+    this.lastPage = this.level;
+  }
+  showPage() {
+    const { width, height } = this.scale;
+    this.pageX = (this.level - 1) * width;
+
+    this.physics.world.setBounds(
+      this.pageX,
+      0,
+      width,
+      height,
+      this.level === 1,
+      false,
+      true,
+      true,
+    );
+
+    this.cameras.main.pan(
+      this.pageX + width / 2,
+      height / 2,
+      600,
+      "Sine.easeInOut",
+      true,
+    );
   }
 
   update() {
+    const { width } = this.scale;
     if (this.arrows.left.isDown) {
       this.block.body.setVelocityX(-250);
     } else if (this.arrows.right.isDown) {
@@ -56,18 +81,15 @@ export class GameScene extends Phaser.Scene {
     if (this.arrows.up.isDown && this.block.body.blocked.down) {
       this.block.body.setVelocityY(-450);
     }
-
-    if (this.block.x > this.scale.width + 20) {
-      if (this.block.x > this.pageX + this.scale.width + 20) {
-        this.level += 1;
+    if (this.block.x > this.pageX + width + 20) {
+      this.level += 1;
+      if (this.level > this.lastPage) {
         this.buildPage();
-        this.cameras.main.pan(
-          this.pageX + this.scale.width / 2,
-          this.scale.height / 2,
-          600,
-          "Sine.easeInOut",
-        );
       }
+      this.showPage();
+    } else if (this.block.x < this.pageX - 20) {
+      this.level -= 1;
+      this.showPage();
     }
   }
 }
