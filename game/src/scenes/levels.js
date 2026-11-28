@@ -11,7 +11,14 @@ export const LEVELS = [
     walls: [{ x: 573, w: 40, h: 70, top: LOW }],
   },
 
-  { ground: [{ x: 0, w: 800, top: LOW }] },
+  {
+    ground: [
+      { x: 0, w: 300, top: LOW },
+      { x: 300, w: 500, top: HIGH },
+    ],
+    ladders: [{ x: 260, top: HIGH - 45, bottom: LOW }],
+  },
+
   { ground: [{ x: 0, w: 800, top: LOW }] },
   { ground: [{ x: 0, w: 800, top: LOW }] },
   { ground: [{ x: 0, w: 800, top: LOW }] },

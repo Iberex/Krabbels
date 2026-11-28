@@ -1,5 +1,7 @@
 import * as Phaser from "phaser";
 import { LEVELS } from "../scenes/levels.js";
+// TESTMENU: verwijderen bij merge
+import { addLevelMenu } from "../levelMenu.js";
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -14,16 +16,30 @@ export class GameScene extends Phaser.Scene {
     const { height } = this.scale;
 
     this.block = this.add.rectangle(40, height - 100, 40, 40, 0xe4572e);
+    this.block.setDepth(1);
     this.physics.add.existing(this.block);
     this.block.body.setCollideWorldBounds(true);
 
     this.solid = this.physics.add.staticGroup();
     this.physics.add.collider(this.block, this.solid);
+    this.ladders = [];
 
     LEVELS.forEach((level, i) => this.buildLevel(level, i));
 
     this.arrows = this.input.keyboard.createCursorKeys();
 
+    this.showPage();
+
+    // TESTMENU: verwijderen bij merge
+    addLevelMenu(this);
+  }
+
+  // TESTMENU: verwijderen bij merge
+  goToLevel(level) {
+    this.level = level;
+    const { width } = this.scale;
+    const start = LEVELS[level - 1].ground[0];
+    this.block.body.reset((level - 1) * width + start.x + 40, start.top - 40);
     this.showPage();
   }
 
@@ -42,11 +58,29 @@ export class GameScene extends Phaser.Scene {
     (level.walls ?? []).forEach((wall) => {
       this.addSolid(x + wall.x, wall.top - wall.h, wall.w, wall.h);
     });
+    (level.ladders ?? []).forEach((ladder) => {
+      const rect = this.add
+        .rectangle(
+          x + ladder.x,
+          ladder.top,
+          40,
+          ladder.bottom - ladder.top,
+          0x8d6e63,
+        )
+        .setOrigin(0);
+      this.ladders.push(rect);
+    });
   }
 
   addSolid(x, y, w, h) {
     const rect = this.add.rectangle(x, y, w, h, 0x333333).setOrigin(0);
     this.solid.add(rect);
+  }
+  isOnLadder() {
+    const feet = this.block.getBottomCenter();
+    return this.ladders.some((ladder) =>
+      ladder.getBounds().contains(feet.x, feet.y),
+    );
   }
 
   showPage() {
@@ -92,7 +126,18 @@ export class GameScene extends Phaser.Scene {
       this.block.body.setVelocityX(0);
     }
 
-    if (this.arrows.up.isDown && this.block.body.blocked.down) {
+    const onLadder = this.isOnLadder();
+    this.block.body.setAllowGravity(!onLadder);
+
+    if (onLadder) {
+      if (this.arrows.up.isDown) {
+        this.block.body.setVelocityY(-150);
+      } else if (this.arrows.down.isDown) {
+        this.block.body.setVelocityY(150);
+      } else {
+        this.block.body.setVelocityY(0);
+      }
+    } else if (this.arrows.up.isDown && this.block.body.blocked.down) {
       this.block.body.setVelocityY(-450);
     }
 
