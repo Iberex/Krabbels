@@ -1,6 +1,6 @@
 import * as Phaser from "phaser";
 import { GameScene } from "./scenes/GameScene.js";
-
+import { EndScene } from "./scenes/EndScene.js";
 const config = {
   type: Phaser.AUTO,
   width: 800,
@@ -14,7 +14,7 @@ const config = {
     default: "arcade",
     arcade: { gravity: { y: 900 } },
   },
-  scene: [GameScene],
+  scene: [GameScene, EndScene],
 };
 
 new Phaser.Game(config);
