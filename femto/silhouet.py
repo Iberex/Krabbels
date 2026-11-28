@@ -1,3 +1,5 @@
+import itertools
+import math
 import os
 import time
 
@@ -16,6 +18,9 @@ SPELER_KLEUREN = [
     (80, 220, 80),                 # groen (BGR): speler 2
 ]
 WACHTTIJD = 1.0                    # seconden uit beeld voor een plaats vrijkomt
+MAX_SPRONG = 600                   # mm: verder dan dit kan een speler niet "springen" tussen twee beelden
+ID_BONUS = 200                     # mm: hetzelfde nummer van de tracker telt alsof je zoveel dichter staat
+TOON_IDS = True                    # toon het nummer van de tracker bovenaan (handig om te testen)
 
 os.environ["PATH"] = FEMTO_MAP + os.pathsep + os.environ["PATH"]
 os.add_dll_directory(FEMTO_MAP)
@@ -38,12 +43,12 @@ tracker_config.processing_mode = pykinect.K4ABT_TRACKER_PROCESSING_MODE_GPU_CUDA
 tracker = pykinect.start_body_tracker(model_type=pykinect.K4ABT_DEFAULT_MODEL)
 print("Body tracking gestart. Druk op q of Esc in een venster om te stoppen.")
 
-# Elke plaats is leeg (None) of {"id": vast nummer van de persoon, "laatst_gezien": tijd}
+# Elke plaats is leeg (None) of {"id": nummer van de tracker, "pos": (x, z) in mm, "laatst_gezien": tijd}
 plaatsen = [None] * MAX_SPELERS
 
 
 def zoek_mensen(body_frame, diepte, body_map):
-    """Geeft {vast id: (index in body_map, afstand in mm)} voor iedereen in beeld."""
+    """Geeft {id: {"index", "afstand", "pos"}} voor iedereen in beeld."""
     mensen = {}
 
     for i in range(body_frame.get_num_bodies()):
@@ -51,30 +56,70 @@ def zoek_mensen(body_frame, diepte, body_map):
         if pixels.size == 0:
             continue
 
-        # Het id blijft hetzelfde zolang de persoon in beeld blijft, de index niet
-        mensen[body_frame.get_body_id(i)] = (i, np.median(pixels))
+        # Het bekken uit het skelet: waar de persoon staat, in mm (x = links/rechts, z = afstand)
+        bekken = body_frame.get_body_skeleton(i).joints[pykinect.K4ABT_JOINT_PELVIS].position.xyz
+
+        mensen[body_frame.get_body_id(i)] = {
+            "index": i,                     # nummer in de body_map van dit beeld
+            "afstand": np.median(pixels),
+            "pos": (bekken.x, bekken.z),
+        }
 
     return mensen
 
 
+def afstand_tussen(a, b):
+    return math.hypot(a[0] - b[0], a[1] - b[1])
+
+
 def werk_plaatsen_bij(mensen, nu):
-    """Wie er al was, houdt zijn plaats. Een vrije plaats gaat naar wie nieuw is."""
-    for p, plaats in enumerate(plaatsen):
-        if plaats is None:
-            continue
-        if plaats["id"] in mensen:
-            plaats["laatst_gezien"] = nu
-        elif nu - plaats["laatst_gezien"] > WACHTTIJD:
+    """Elke speler houdt zijn plaats: wie het dichtst staat bij waar die speler net was."""
+    bezet = [p for p, plaats in enumerate(plaatsen) if plaats is not None]
+
+    # Probeer elke manier om de bezette plaatsen te verdelen over de mensen in beeld
+    # (None = die speler is even niet te zien). Kies de verdeling met de kleinste sprongen.
+    beste, beste_kost = {}, None
+    for keuze in itertools.permutations(list(mensen) + [None] * len(bezet), len(bezet)):
+        kost = 0
+        mogelijk = True
+        for p, id in zip(bezet, keuze):
+            if id is None:
+                kost += MAX_SPRONG
+                continue
+            sprong = afstand_tussen(plaatsen[p]["pos"], mensen[id]["pos"])
+            if id == plaatsen[p]["id"]:
+                kost += min(sprong, MAX_SPRONG) - ID_BONUS   # zelfde nummer: de tracker zegt "dit is hem"
+            elif sprong > MAX_SPRONG:
+                mogelijk = False                              # te ver weg om dezelfde persoon te zijn
+                break
+            else:
+                kost += sprong
+        if mogelijk and (beste_kost is None or kost < beste_kost):
+            beste, beste_kost = dict(zip(bezet, keuze)), kost
+
+    for p in bezet:
+        id = beste.get(p)
+        if id is not None:
+            plaatsen[p].update(id=id, pos=mensen[id]["pos"], laatst_gezien=nu)
+        elif nu - plaatsen[p]["laatst_gezien"] > WACHTTIJD:
             plaatsen[p] = None     # te lang weg: de plaats komt vrij
 
-    bezet = {plaats["id"] for plaats in plaatsen if plaats is not None}
-
-    # Nieuwe mensen, dichtste eerst (als er twee tegelijk binnenkomen)
-    nieuw = sorted((id for id in mensen if id not in bezet), key=lambda id: mensen[id][1])
+    # Wie nog geen plaats heeft, krijgt een vrije plaats (dichtste eerst)
+    toegewezen = {id for id in beste.values() if id is not None}
+    nieuw = sorted((id for id in mensen if id not in toegewezen), key=lambda id: mensen[id]["afstand"])
 
     for p in range(MAX_SPELERS):
         if plaatsen[p] is None and nieuw:
-            plaatsen[p] = {"id": nieuw.pop(0), "laatst_gezien": nu}
+            id = nieuw.pop(0)
+            plaatsen[p] = {"id": id, "pos": mensen[id]["pos"], "laatst_gezien": nu}
+
+
+def speler_in_beeld(p, mensen):
+    """Geeft de gegevens van speler p als die nu te zien is, anders None."""
+    plaats = plaatsen[p]
+    if plaats is None or plaats["id"] not in mensen:
+        return None
+    return mensen[plaats["id"]]
 
 
 def maak_silhouetbeeld(diepte, body_map, mensen):
@@ -86,11 +131,11 @@ def maak_silhouetbeeld(diepte, body_map, mensen):
     beeld[iemand] = (0.3 * beeld[iemand] + 0.7 * np.array(ANDERE_KLEUR)).astype(np.uint8)
 
     # Daarna elke speler in zijn eigen kleur
-    for p, plaats in enumerate(plaatsen):
-        if plaats is None or plaats["id"] not in mensen:
+    for p in range(MAX_SPELERS):
+        speler = speler_in_beeld(p, mensen)
+        if speler is None:
             continue
-        index, afstand = mensen[plaats["id"]]
-        is_speler = body_map == index
+        is_speler = body_map == speler["index"]
         beeld[is_speler] = (0.3 * beeld[is_speler] + 0.7 * np.array(SPELER_KLEUREN[p])).astype(np.uint8)
 
     return beeld
@@ -99,10 +144,9 @@ def maak_silhouetbeeld(diepte, body_map, mensen):
 def maak_masker(body_map, mensen, p):
     """Wit waar speler p staat, zwart elders."""
     masker = np.zeros(body_map.shape, dtype=np.uint8)
-    plaats = plaatsen[p]
-    if plaats is not None and plaats["id"] in mensen:
-        index, afstand = mensen[plaats["id"]]
-        masker[body_map == index] = 255
+    speler = speler_in_beeld(p, mensen)
+    if speler is not None:
+        masker[body_map == speler["index"]] = 255
     return masker
 
 
@@ -133,12 +177,14 @@ while True:
         # Bovenaan: per speler de afstand, of "wacht" als zijn plaats leeg is
         delen = []
         for p, plaats in enumerate(plaatsen):
+            speler = speler_in_beeld(p, mensen)
             if plaats is None:
                 delen.append(f"S{p + 1}: wacht")
-            elif plaats["id"] in mensen:
-                delen.append(f"S{p + 1}: {mensen[plaats['id']][1] / 1000:.1f} m")
-            else:
+            elif speler is None:
                 delen.append(f"S{p + 1}: even weg")
+            else:
+                id_tekst = f" (id {plaats['id']})" if TOON_IDS else ""
+                delen.append(f"S{p + 1}: {speler['afstand'] / 1000:.1f} m{id_tekst}")
         tekst = f"{len(mensen)} in beeld   " + "   ".join(delen) + f"   {fps:.0f} FPS"
         cv2.putText(beeld, tekst, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         cv2.imshow("Silhouet", beeld)
