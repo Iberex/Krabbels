@@ -17,6 +17,7 @@ export const LEVELS = [
       { x: 300, w: 500, top: HIGH },
     ],
     ladders: [{ x: 260, top: HIGH - 45, bottom: LOW }],
+    ceilings: [{ x: 560, w: 80, bottom: HIGH - 30 }],
   },
 
   { ground: [{ x: 0, w: 800, top: LOW }] },

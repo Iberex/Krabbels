@@ -15,7 +15,9 @@ export class GameScene extends Phaser.Scene {
   create() {
     const { height } = this.scale;
 
-    this.block = this.add.rectangle(40, height - 100, 40, 40, 0xe4572e);
+    this.block = this.add
+      .rectangle(40, height - 100, 40, 40, 0xe4572e)
+      .setOrigin(0.5, 1);
     this.block.setDepth(1);
     this.physics.add.existing(this.block);
     this.block.body.setCollideWorldBounds(true);
@@ -57,6 +59,9 @@ export class GameScene extends Phaser.Scene {
     });
     (level.walls ?? []).forEach((wall) => {
       this.addSolid(x + wall.x, wall.top - wall.h, wall.w, wall.h);
+    });
+    (level.ceilings ?? []).forEach((ceiling) => {
+      this.addSolid(x + ceiling.x, 0, ceiling.w, ceiling.bottom);
     });
     (level.ladders ?? []).forEach((ladder) => {
       const rect = this.add
@@ -140,6 +145,17 @@ export class GameScene extends Phaser.Scene {
     } else if (this.arrows.up.isDown && this.block.body.blocked.down) {
       this.block.body.setVelocityY(-450);
     }
+    const roomToStand =
+      this.physics.overlapRect(
+        this.block.x - 18,
+        this.block.y - 40,
+        36,
+        20,
+        false,
+        true,
+      ).length === 0;
+    const crouch = (this.arrows.down.isDown && !onLadder) || !roomToStand;
+    this.block.setScale(1, crouch ? 0.5 : 1);
 
     const { width, height } = this.scale;
 
