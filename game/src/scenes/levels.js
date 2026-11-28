@@ -20,7 +20,20 @@ export const LEVELS = [
     ceilings: [{ x: 560, w: 80, bottom: HIGH - 30 }],
   },
 
-  { ground: [{ x: 0, w: 800, top: LOW }] },
-  { ground: [{ x: 0, w: 800, top: LOW }] },
+  {
+    ground: [
+      { x: 0, w: 240, top: HIGH },
+      { x: 360, w: 440, top: MID },
+    ],
+    walls: [{ x: 580, w: 40, h: 70, top: MID }],
+  },
+  {
+    ground: [
+      { x: 0, w: 220, top: MID },
+      { x: 340, w: 200, top: MID },
+      { x: 660, w: 140, top: LOW },
+    ],
+  },
+
   { ground: [{ x: 0, w: 800, top: LOW }] },
 ];
